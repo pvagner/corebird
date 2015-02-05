@@ -50,6 +50,14 @@
                             <!--<property name="icon_name">go-previous-symbolic</property>-->
                           <!--</object>-->
                         <!--</child>-->
+                        <accessibility>
+
+                        </accessibility>
+                        <child internal-child="accessible">
+                          <object class="AtkObject" id="a11y-back_button">
+                            <property name="AtkObject::accessible_name" translatable="yes">Back</property>
+                            </object>
+                        </child>
                       <!--</object>-->
                     <!--</child>-->
                   <!--</object>-->
@@ -81,6 +89,14 @@
                             <!--<property name="icon_name">go-next-symbolic</property>-->
                           <!--</object>-->
                         <!--</child>-->
+                        <accessibility>
+
+                        </accessibility>
+                        <child internal-child="accessible">
+                          <object class="AtkObject" id="a11y-next_button">
+                            <property name="AtkObject::accessible_name" translatable="yes">Forward</property>
+                            </object>
+                        </child>
                       <!--</object>-->
                     <!--</child>-->
                   <!--</object>-->
