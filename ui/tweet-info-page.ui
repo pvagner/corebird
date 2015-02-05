@@ -256,6 +256,14 @@
                 <property name="icon_size">1</property>
               </object>
             </child>
+            <accessibility>
+
+            </accessibility>
+            <child internal-child="accessible">
+              <object class="AtkObject" id="a11y-retweet_button">
+                <property name="AtkObject::accessible_name" translatable="yes">Retweet tweet</property>
+                </object>
+            </child>
             <style>
               <class name="retweet-button"/>
               <class name="dim-label"/>
@@ -285,6 +293,14 @@
                 <property name="icon_name">starred-symbolic</property>
                 <property name="icon_size">1</property>
               </object>
+            </child>
+            <accessibility>
+
+            </accessibility>
+            <child internal-child="accessible">
+              <object class="AtkObject" id="a11y-favorite_button">
+                <property name="AtkObject::accessible_name" translatable="yes">Favorite tweet</property>
+                </object>
             </child>
             <style>
               <class name="favorite-button"/>
