@@ -122,6 +122,8 @@ public class TweetListEntry : ITwitterItem, Gtk.ListBoxRow {
     }
 
     retweet_button.active = tweet.retweeted;
+    retweet_button.sensitive = (tweet.user_id != account.id) &&
+                               !tweet.protected;
     tweet.notify["retweeted"].connect (retweeted_cb);
 
     favorite_button.active = tweet.favorited;
@@ -161,8 +163,7 @@ public class TweetListEntry : ITwitterItem, Gtk.ListBoxRow {
         favorite_button.active = !favorite_button.active;
     });
     retweet_tweet.connect (() => {
-      if (retweet_button.parent != null)
-        retweet_button.tap ();
+      retweet_button.tap ();
     });
 
     if (tweet.favorited)
@@ -244,14 +245,17 @@ public class TweetListEntry : ITwitterItem, Gtk.ListBoxRow {
   [GtkCallback]
   private void retweet_button_toggled_cb () {
     /* You can't retweet your own tweets. */
-    if (account.id == this.tweet.user_id || !values_set)
+    if (account.id == this.tweet.user_id || !values_set) {
+      retweet_button.active = false;
       return;
+    }
 
     retweet_button.sensitive = false;
     TweetUtils.toggle_retweet_tweet.begin (account, tweet, !retweet_button.active, () => {
       retweet_button.sensitive = true;
     });
-    toggle_mode ();
+    if (shows_actions)
+      toggle_mode ();
   }
 
   [GtkCallback]
@@ -263,7 +267,8 @@ public class TweetListEntry : ITwitterItem, Gtk.ListBoxRow {
     TweetUtils.toggle_favorite_tweet.begin (account, tweet, !favorite_button.active, () => {
       favorite_button.sensitive = true;
     });
-    toggle_mode ();
+    if (shows_actions)
+      toggle_mode ();
   }
 
   [GtkCallback]
@@ -279,7 +284,8 @@ public class TweetListEntry : ITwitterItem, Gtk.ListBoxRow {
                                                     ComposeTweetWindow.Mode.REPLY,
                                                     this.window.get_application ());
     ctw.show ();
-    toggle_mode ();
+    if (shows_actions)
+      toggle_mode ();
   }
 
   private void quote_activated () {
@@ -337,9 +343,12 @@ public class TweetListEntry : ITwitterItem, Gtk.ListBoxRow {
     if (this._read_only)
       return;
 
-    if (stack.visible_child == action_box)
+    if (stack.visible_child == action_box) {
       stack.visible_child = grid;
-    else
+      this.activatable = true;
+    } else {
       stack.visible_child = action_box;
+      this.activatable = false;
+    }
   }
 }

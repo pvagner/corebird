@@ -30,7 +30,7 @@ public class Corebird : Gtk.Application {
     {"show-about-dialog", about_activated                 },
     {"show-dm-thread",    show_dm_thread,          "(sx)" },
     {"mark-seen",         mark_seen,               "(sx)" },
-    {"show-window",       show_window,             "s"    }
+    {"show-window",       show_window,             "x"    }
   };
 
 
@@ -72,37 +72,14 @@ public class Corebird : Gtk.Application {
       return -1;
     }
 
-    this.set_accels_for_action ("win.compose-tweet", {Settings.get_accel ("compose-tweet")});
-    this.set_accels_for_action ("win.toggle-sidebar", {Settings.get_accel ("toggle-sidebar")});
-    this.set_accels_for_action ("win.switch-page(0)", {"<Alt>1"});
-    this.set_accels_for_action ("win.switch-page(1)", {"<Alt>2"});
-    this.set_accels_for_action ("win.switch-page(2)", {"<Alt>3"});
-    this.set_accels_for_action ("win.switch-page(3)", {"<Alt>4"});
-    this.set_accels_for_action ("win.switch-page(4)", {"<Alt>5"});
-    this.set_accels_for_action ("win.switch-page(5)", {"<Alt>6"});
-    this.set_accels_for_action ("win.switch-page(6)", {"<Alt>7"});
-    this.set_accels_for_action ("app.show-settings", {Settings.get_accel ("show-settings")});
-    this.set_accels_for_action ("app.quit", {"<Control>Q"});
-    this.set_accels_for_action ("win.show-account-dialog", {Settings.get_accel ("show-account-dialog")});
-    this.set_accels_for_action ("win.show-account-list", {Settings.get_accel ("show-account-list")});
-
-    this.add_action_entries (app_entries, this);
-
     open_startup_windows (compose_screen_name);
-
-
-    // If the user wants the dark theme, apply it
-    var gtk_s = Gtk.Settings.get_default ();
-    if (Settings.use_dark_theme ()) {
-      gtk_s.gtk_application_prefer_dark_theme = true;
-    }
-
-    if (gtk_s.gtk_decoration_layout.contains ("menu")) {
-      gtk_s.gtk_decoration_layout = gtk_s.gtk_decoration_layout.replace ("menu", "");
-    }
 
     this.release ();
     return 0;
+  }
+
+  public override void activate () {
+    open_startup_windows (null);
   }
 
   private void show_settings_activated () {
@@ -171,6 +148,38 @@ public class Corebird : Gtk.Application {
     ((GLib.Menu)acc_menu).append_submenu (_("Open Account"), account_menu);
 
     this.set_app_menu (app_menu);
+
+
+
+    this.set_accels_for_action ("win.compose-tweet", {Settings.get_accel ("compose-tweet")});
+    this.set_accels_for_action ("win.toggle-sidebar", {Settings.get_accel ("toggle-sidebar")});
+    this.set_accels_for_action ("win.switch-page(0)", {"<Alt>1"});
+    this.set_accels_for_action ("win.switch-page(1)", {"<Alt>2"});
+    this.set_accels_for_action ("win.switch-page(2)", {"<Alt>3"});
+    this.set_accels_for_action ("win.switch-page(3)", {"<Alt>4"});
+    this.set_accels_for_action ("win.switch-page(4)", {"<Alt>5"});
+    this.set_accels_for_action ("win.switch-page(5)", {"<Alt>6"});
+    this.set_accels_for_action ("win.switch-page(6)", {"<Alt>7"});
+    this.set_accels_for_action ("app.show-settings", {Settings.get_accel ("show-settings")});
+    this.set_accels_for_action ("app.quit", {"<Control>Q"});
+    this.set_accels_for_action ("win.show-account-dialog", {Settings.get_accel ("show-account-dialog")});
+    this.set_accels_for_action ("win.show-account-list", {Settings.get_accel ("show-account-list")});
+
+    this.add_action_entries (app_entries, this);
+
+    // If the user wants the dark theme, apply it
+    var gtk_s = Gtk.Settings.get_default ();
+    if (Settings.use_dark_theme ()) {
+      gtk_s.gtk_application_prefer_dark_theme = true;
+    }
+
+    if (gtk_s.gtk_decoration_layout.contains ("menu")) {
+      gtk_s.gtk_decoration_layout = gtk_s.gtk_decoration_layout.replace ("menu", "");
+    }
+
+
+
+
   } // }}}
 
   public override void shutdown () {
@@ -260,11 +269,16 @@ public class Corebird : Gtk.Application {
         }
       }
       /* If we did not open any window at all since all windows for every account
-         in the startups-account array were already open, just open a new windwo with a null account */
+         in the startups-account array were already open, just open a new window with a null account */
       if (!opened_window) {
         if (n_accounts > 0) {
-          add_window_for_screen_name (Account.list_accounts ().nth_data (0).screen_name);
-          return;
+          /* Check if *any* of the configured accounts (not just startup-accounts)
+             is not opened in a window */
+          foreach (Account account in Account.list_accounts ())
+            if (!is_window_open_for_user_id (account.id, null)) {
+              add_window_for_account (account);
+              return;
+            }
         }
         foreach (Gtk.Window w in this.get_windows ())
           if (((MainWindow)w).account.screen_name == Account.DUMMY) {
@@ -382,17 +396,17 @@ public class Corebird : Gtk.Application {
   /********************************************************/
 
   private void show_dm_thread (GLib.SimpleAction a, GLib.Variant? value) {
-    // Values: Account screen_name, sender_id
-    string account_screen_name = value.get_child_value (0).get_string ();
-    int64 sender_id = value.get_child_value (1).get_int64 ();
+    // Values: Account id, sender_id
+    int64 account_id = value.get_child_value (0).get_int64 ();
+    int64 sender_id  = value.get_child_value (1).get_int64 ();
     MainWindow main_window;
-    if (is_window_open_for_screen_name (account_screen_name, out main_window)) {
+    if (is_window_open_for_user_id (account_id, out main_window)) {
       var bundle = new Bundle ();
       bundle.put_int64 ("sender_id", sender_id);
       main_window.main_widget.switch_page (Page.DM, bundle);
       main_window.present ();
     } else
-      warning ("Window for Account %s is not open, abort.", account_screen_name);
+      warning ("Window for Account %s is not open, abort.", account_id.to_string ());
   }
 
   private void mark_seen (GLib.SimpleAction a, GLib.Variant? value) {
@@ -406,9 +420,9 @@ public class Corebird : Gtk.Application {
   }
 
   private void show_window (GLib.SimpleAction a, GLib.Variant? value) {
-    string screen_name = value.get_string ();
+    int64 user_id = value.get_int64 ();
     MainWindow main_window;
-    if (is_window_open_for_screen_name (screen_name, out main_window))
+    if (is_window_open_for_user_id (user_id, out main_window))
       main_window.present ();
     else
       warning ("TODO: Implement");
