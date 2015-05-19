@@ -247,8 +247,6 @@ namespace TweetUtils {
     } else if (uri.has_prefix ("https://twitter.com/")) {
       // XXX https://twitter.com/baedert/status/321423423423
       string[] parts = uri.split ("/");
-      foreach (string s in parts)
-        message (s);
       if (parts[4] == "status") {
         /* Treat it as a tweet link and hope it'll work out */
         int64 tweet_id = int64.parse (parts[5]);
@@ -265,19 +263,11 @@ namespace TweetUtils {
   }
 
 
-  struct WorkerResult {
-    int64 max_id;
-    int64 min_id;
-  }
-
-  async WorkerResult work_array (Json.Array   json_array,
-                                 uint         requested_tweet_count,
-                                 DeltaUpdater delta_updater,
-                                 TweetListBox tweet_list,
-                                 MainWindow   main_window,
-                                 Account      account) {
-    int64 max = 0;
-    int64 min = int64.MAX;
+  async void work_array (Json.Array   json_array,
+                         uint         requested_tweet_count, /* XXX Unused */
+                         TweetListBox tweet_list,
+                         MainWindow   main_window,
+                         Account      account) {
     new Thread<void*> ("TweetWorker", () => {
       Tweet[] tweet_array = new Tweet[json_array.get_length ()];
 
@@ -285,7 +275,6 @@ namespace TweetUtils {
          need to do all the later stuff */
       if (tweet_array.length == 0) {
         GLib.Idle.add (() => {
-          tweet_list.remove_progress_entry ();
           work_array.callback ();
           return false;
         });
@@ -296,11 +285,6 @@ namespace TweetUtils {
       json_array.foreach_element ((array, index, node) => {
         Tweet t = new Tweet ();
         t.load_from_json (node, now, account);
-        if (t.id > max)
-          max = t.id;
-
-        if (t.id < min)
-          min = t.id;
 
         tweet_array[index] = t;
       });
@@ -309,29 +293,20 @@ namespace TweetUtils {
       int index = 0;
       GLib.Idle.add (() => {
         Tweet tweet = tweet_array[index];
-        var entry = new TweetListEntry (tweet, main_window, account);
         if (account.user_counter == null)
           return false;
 
         account.user_counter.user_seen (tweet.user_id,
                                         tweet.screen_name,
                                         tweet.user_name);
-        delta_updater.add (entry);
-        tweet_list.add (entry);
 
-        if (account.filter_matches (entry.tweet))
-          entry.hide ();
-        else
-          entry.show ();
+        if (account.filter_matches (tweet))
+          tweet.hidden_flags |= Tweet.HIDDEN_FILTERED;
+
+        tweet_list.model.add (tweet);
 
         index ++;
         if (index == tweet_array.length) {
-          if (tweet_array.length < requested_tweet_count - 5) {
-            debug ("Removing progress entry. Requested: %u, Got: %d", requested_tweet_count,
-                                                                      tweet_array.length);
-            tweet_list.remove_progress_entry ();
-          } else
-            tweet_list.add_progress_entry ();
           work_array.callback ();
           return false;
         }
@@ -340,7 +315,6 @@ namespace TweetUtils {
       return null;
     });
     yield;
-    return {max, min};
   }
 
 

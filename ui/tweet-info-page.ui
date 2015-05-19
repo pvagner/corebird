@@ -26,6 +26,7 @@
                 <property name="name">s</property>
                 <property name="can_focus">False</property>
                 <property name="selection_mode">none</property>
+                <property name="spinner_size">16</property>
               </object>
             </child>
           </object>
@@ -64,7 +65,7 @@
                 <property name="height_request">48</property>
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>
-                <property name="margin_start">8</property>
+                <property name="margin_start">12</property>
                 <property name="margin_top">6</property>
                 <property name="margin_bottom">6</property>
                 <property name="margin_end">6</property>

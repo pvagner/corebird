@@ -18,7 +18,6 @@
 public class TweetListBox : Gtk.ListBox {
   private Gtk.Stack placeholder;
   private Gtk.Label no_entries_label;
-  private ProgressEntry progress_entry;
 
   private Gtk.Box error_box;
   private Gtk.Label error_label;
@@ -40,6 +39,9 @@ public class TweetListBox : Gtk.ListBox {
       spinner.set_size_request (value, value);
     }
   }
+  public unowned DeltaUpdater delta_updater;
+  public unowned Account account;
+  public TweetModel model = new TweetModel ();
 
   public TweetListBox (bool show_placeholder = true) {
     if (show_placeholder) {
@@ -50,13 +52,22 @@ public class TweetListBox : Gtk.ListBox {
 
   construct {
     add_placeholder ();
-    progress_entry = new ProgressEntry ();
     this.get_style_context ().add_class ("stream");
     this.set_selection_mode (Gtk.SelectionMode.NONE);
     this.button_press_event.connect (button_press_cb);
     Settings.get ().bind ("double-click-activation",
                           this, "activate-on-single-click",
                           GLib.SettingsBindFlags.INVERT_BOOLEAN);
+    this.bind_model (this.model, (obj) => {
+      assert (obj is Tweet);
+
+      var row = new TweetListEntry ((Tweet) obj,
+                                    (MainWindow) get_toplevel (),
+                                    this.account);
+      delta_updater.add (row);
+      row.show ();
+      return row;
+    });
   }
 
   private bool button_press_cb (Gdk.EventButton evt) {
@@ -156,19 +167,6 @@ public class TweetListBox : Gtk.ListBox {
     this.foreach ((w) => {
       remove (w);
     });
-  }
-
-  public void add_progress_entry () {
-    if (progress_entry.parent == null) {
-      progress_entry.show_all ();
-      this.add (progress_entry);
-    }
-  }
-
-  public void remove_progress_entry () {
-    if (progress_entry.parent != null) {
-      this.remove (progress_entry);
-    }
   }
 
   public Gtk.Widget? get_first_visible_row () {
