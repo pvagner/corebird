@@ -444,6 +444,90 @@
             <property name="name">tweet</property>
           </packing>
         </child>
+
+        <child>
+          <object class="GtkBox">
+            <property name="visible">true</property>
+            <property name="orientation">vertical</property>
+
+            <child>
+              <object class="GtkScrolledWindow">
+                <property name="visible">true</property>
+                <property name="vexpand">true</property>
+                <property name="hexpand">true</property>
+                <child>
+                  <object class="GtkListBox" id="snippet_list_box">
+                    <property name="visible">true</property>
+                    <property name="selection_mode">none</property>
+                    <signal name="row-activated" handler="snippet_entry_activated_cb" />
+                    <child type="placeholder">
+                      <object class="GtkLabel">
+                        <property name="visible">true</property>
+                        <property name="label" translatable="yes">No snippets configured.</property>
+                        <style>
+                          <class name="dim-label" />
+                        </style>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+
+            <child>
+              <object class="GtkBox">
+                <property name="visible">true</property>
+                <property name="orientation">horizontal</property>
+
+                <child>
+                  <object class="GtkButton">
+                    <property name="visible">true</property>
+                    <property name="relief">none</property>
+                    <property name="valign">center</property>
+                    <property name="margin">6</property>
+                    <signal name="clicked" handler="add_snippet_button_clicked_cb" />
+                    <style>
+                      <class name="image-button" />
+                    </style>
+
+                    <child>
+                      <object class="GtkImage">
+                        <property name="visible">true</property>
+                        <property name="icon-name">list-add-symbolic</property>
+                      </object>
+                    </child>
+
+                  </object>
+                </child>
+
+
+                <child>
+                  <object class="GtkLabel">
+                    <property name="visible">true</property>
+                    <property name="label" translatable="yes">Snippets allow you to do THINGS!</property>
+                    <property name="halign">center</property>
+                    <property name="hexpand">true</property>
+                    <property name="wrap">true</property>
+                    <style>
+                      <class name="dim-label" />
+                    </style>
+                  </object>
+                </child>
+
+              </object>
+            </child>
+
+
+
+
+          </object>
+          <packing>
+            <property name="title" translatable="yes">Snippets</property>
+            <property name="name">snippets</property>
+          </packing>
+        </child>
+
+
       </object>
     </child>
   </template>

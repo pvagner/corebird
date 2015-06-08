@@ -43,6 +43,7 @@ cb_sources = \
 			FilterPage.vala \
 			Media.vala \
 			UserEventReceiver.vala \
+			SnippetManager.vala \
 			widgets/TweetListBox.vala \
 			widgets/MaxSizeContainer.vala \
 			widgets/ScrollWidget.vala \
@@ -86,6 +87,7 @@ cb_sources = \
 			list/UserFilterEntry.vala \
 			list/AddListEntry.vala \
 			list/ProgressEntry.vala \
+			list/SnippetListEntry.vala \
 			window/ComposeTweetWindow.vala \
 			window/SettingsDialog.vala \
 			window/UserListDialog.vala \
@@ -94,6 +96,7 @@ cb_sources = \
 			window/AccountDialog.vala \
 			window/MediaDialog.vala \
 			window/ImageCropDialog.vala \
+			window/ModifySnippetDialog.vala \
 			sql/Database.vala \
 			sql/Statement.vala \
 			sql/UpdateStatement.vala \

@@ -72,8 +72,51 @@ class CompletionTextView : Gtk.TextView {
     this.account = account;
   }
 
+  private bool insert_snippet () {
+    Gtk.TextIter cursor_word_start;
+    Gtk.TextIter cursor_word_end;
+    string cursor_word = get_cursor_word (out cursor_word_start,
+                                          out cursor_word_end);
+
+    /* See the git log for an explanation */
+    if (cursor_word.get_char (0) == ' ' ||
+        cursor_word.get_char (0) == '\t' ||
+        cursor_word.get_char (0) == '\n') {
+      cursor_word = cursor_word.substring (1);
+      cursor_word_start.forward_char ();
+    }
+
+    string? snippet = Corebird.snippet_manager.get_snippet (cursor_word.strip ());
+
+    if (snippet == null) {
+      debug ("No snippet for cursor_word '%s' found.", cursor_word);
+      return false;
+    }
+
+    Gtk.TextIter start_word_iter;
+
+    this.buffer.freeze_notify ();
+    this.buffer.delete_range (cursor_word_start, cursor_word_end);
+
+    Gtk.TextMark cursor_mark = this.buffer.get_insert ();
+    this.buffer.get_iter_at_mark (out start_word_iter, cursor_mark);
+
+    this.buffer.insert_text (ref start_word_iter, snippet, snippet.length);
+    this.buffer.thaw_notify ();
+
+    return true;
+  }
+
+  private inline bool snippets_configured () {
+    return Corebird.snippet_manager.n_snippets () > 0;
+  }
 
   public bool key_press_event_cb (Gdk.EventKey evt) {
+
+    if (evt.keyval == Gdk.Key.Tab && snippets_configured ()) {
+      return insert_snippet ();
+    }
+
     /* If we are not in 'completion mode' atm, just back out. */
     if (!completion_window.visible)
       return false;
@@ -112,6 +155,7 @@ class CompletionTextView : Gtk.TextView {
       completion_window.hide ();
       return true;
     }
+
 
     return false;
   }
@@ -188,30 +232,37 @@ class CompletionTextView : Gtk.TextView {
     Gtk.TextIter cursor_iter;
     this.buffer.get_iter_at_mark (out cursor_iter, cursor_mark);
 
-    Gtk.TextIter end_word_iter = Gtk.TextIter();
-    end_word_iter.assign (cursor_iter);
-
-
     /* Check if the current "word" is just "@" */
     var test_iter = Gtk.TextIter ();
     test_iter.assign (cursor_iter);
-    test_iter.backward_char ();
-    if (this.buffer.get_text (test_iter, cursor_iter, false) != "@") {
-      // Go to the word start and one char back(i.e. the @)
-      cursor_iter.backward_word_start ();
-      cursor_iter.backward_char ();
 
-      // Go to the end of the word
-      end_word_iter.forward_word_end ();
-    } else {
-      end_word_iter.assign (cursor_iter);
-      cursor_iter.backward_char ();
+
+    for (;;) {
+      Gtk.TextIter left_iter = test_iter;
+      left_iter.assign (test_iter);
+
+      left_iter.backward_char ();
+
+      string s = this.buffer.get_text (left_iter, test_iter, false);
+      unichar c = s.get_char (0);
+      assert (s.char_count () == 1 ||
+              s.char_count () == 0);
+
+      if (left_iter.is_start ())
+        test_iter.assign (left_iter);
+
+      if (c.isspace() || left_iter.is_start ()) {
+        break;
+      }
+
+      test_iter.assign (left_iter);
     }
-    start_iter = cursor_iter;
-    start_iter.assign (cursor_iter);
-    end_iter = end_word_iter;
-    end_iter.assign (end_word_iter);
-    return this.buffer.get_text (cursor_iter, end_word_iter, false);
+
+    start_iter = test_iter;
+    start_iter.assign (test_iter);
+    end_iter = cursor_iter;
+    end_iter.assign (cursor_iter);
+    return this.buffer.get_text (test_iter, cursor_iter, false);
   }
   private void insert_completion (string compl) {
     this.buffer.freeze_notify ();

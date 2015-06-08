@@ -39,6 +39,8 @@ class SettingsDialog : Gtk.Window {
   private Gtk.Switch remove_trailing_hashtags_switch;
   [GtkChild]
   private Gtk.Switch remove_media_links_switch;
+  [GtkChild]
+  private Gtk.ListBox snippet_list_box;
 
   private TweetListEntry sample_tweet_entry;
 
@@ -122,6 +124,15 @@ class SettingsDialog : Gtk.Window {
                                               text_transform_flags);
     remove_media_links_switch.active = (TransformFlags.REMOVE_MEDIA_LINKS in text_transform_flags);
 
+
+    // Fill snippet list box
+    Corebird.snippet_manager.query_snippets ((key, value) => {
+      var e = new SnippetListEntry (key, value);
+      e.show_all ();
+      snippet_list_box.add (e);
+    });
+    snippet_list_box.set_header_func (default_header_func);
+
     add_accels ();
     load_geometry ();
   }
@@ -130,6 +141,54 @@ class SettingsDialog : Gtk.Window {
   private bool window_destroy_cb () {
     save_geometry ();
     return false;
+  }
+
+  [GtkCallback]
+  private void snippet_entry_activated_cb (Gtk.ListBoxRow row) {
+    var snippet_row = (SnippetListEntry) row;
+    var d = new ModifySnippetDialog (snippet_row.key,
+                                     snippet_row.value);
+    d.snippet_updated.connect (snippet_updated_func);
+    d.set_transient_for (this);
+    d.modal = true;
+    d.show ();
+  }
+
+  [GtkCallback]
+  private void add_snippet_button_clicked_cb () {
+    var d = new ModifySnippetDialog ();
+    d.snippet_updated.connect (snippet_updated_func);
+    d.set_transient_for (this);
+    d.modal = true;
+    d.show ();
+  }
+
+  private void snippet_updated_func (string? old_key, string? key, string? value) {
+    if (old_key != null && key == null && value == null) {
+      foreach (var _row in snippet_list_box.get_children ()) {
+        var srow = (SnippetListEntry) _row;
+        if (srow.key == old_key) {
+          srow.reveal ();
+          break;
+        }
+      }
+      return;
+    }
+
+    if (old_key == null) {
+      var e = new SnippetListEntry (key, value);
+      e.show_all ();
+      snippet_list_box.add (e);
+    } else {
+      foreach (var _row in snippet_list_box.get_children ()) {
+        var srow = (SnippetListEntry) _row;
+        if (srow.key == old_key) {
+          srow.key = key;
+          srow.value = value;
+          break;
+        }
+      }
+    }
   }
 
   private void load_geometry () {
@@ -176,6 +235,9 @@ class SettingsDialog : Gtk.Window {
         () => {main_stack.visible_child_name = "notifications"; return true;});
     ag.connect (Gdk.Key.@3, Gdk.ModifierType.MOD1_MASK, Gtk.AccelFlags.LOCKED,
         () => {main_stack.visible_child_name = "tweet"; return true;});
+    ag.connect (Gdk.Key.@4, Gdk.ModifierType.MOD1_MASK, Gtk.AccelFlags.LOCKED,
+        () => {main_stack.visible_child_name = "snippets"; return true;});
+
 
     this.add_accel_group(ag);
   }
