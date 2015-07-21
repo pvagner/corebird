@@ -72,42 +72,53 @@ class SettingsDialog : Gtk.Window {
 
     // Set up sample tweet {{{
     var sample_tweet = new Tweet ();
-    sample_tweet.text = "Hey, check out this new #Corebird version! #cool #newisalwaysbetter";
-    sample_tweet.screen_name = "corebirdclient";
-    sample_tweet.user_name = "Corebird";
+    sample_tweet.source_tweet = new MiniTweet();
+    sample_tweet.source_tweet.author = UserIdentity() {
+      id = 12,
+      screen_name = "corebirdclient",
+      user_name = "Corebird"
+    };
+    string sample_text = _("Hey, check out this new #Corebird version! \\ (•◡•) / #cool #newisalwaysbetter");
     Gdk.Pixbuf? a = null;
     try {
       a = Gtk.IconTheme.get_default ().load_icon ("corebird", 48,
                                                   Gtk.IconLookupFlags.FORCE_SIZE);
+      sample_tweet.avatar = Gdk.cairo_surface_create_from_pixbuf (a, 1, null);
     } catch (GLib.Error e) {
       warning (e.message);
-      // Ignore.
     }
-    sample_tweet.avatar = a;
+    sample_tweet.source_tweet.text = sample_text;
 
+    try {
+      var regex = new GLib.Regex ("#\\w+");
+      GLib.MatchInfo match_info;
+      bool matched = regex.match (sample_text, 0, out match_info);
+      assert (matched);
 
-    sample_tweet.urls = new TextEntity[3];
-    sample_tweet.urls[0] = TextEntity () {
-      from = 24,
-      to = 33,
-      display_text = "#Corebird",
-      target = "somewhere" // doesn't matter here
-    };
-    sample_tweet.urls[1] = TextEntity () {
-      from = 43,
-      to = 48,
-      display_text = "#cool",
-      target = "foo"
-    };
-    sample_tweet.urls[2] = TextEntity () {
-      from = 49,
-      to = 67,
-      display_text = "#newisalwaysbetter",
-      target = "foobar"
-    };
+      sample_tweet.source_tweet.entities = new TextEntity[3];
+
+      int i = 0;
+      while (match_info.matches ()) {
+        assert (match_info.get_match_count () == 1);
+        int from, to;
+        match_info.fetch_pos (0, out from, out to);
+        string match = match_info.fetch (0);
+        sample_tweet.source_tweet.entities[i] = TextEntity () {
+          from = sample_text.char_count (from),
+          to   = sample_text.char_count (to),
+          display_text = match,
+          target       = "foobar"
+        };
+
+        match_info.next ();
+        i ++;
+      }
+    } catch (GLib.RegexError e) {
+      critical (e.message);
+    }
 
     // Just to be sure
-    TweetUtils.sort_entities (ref sample_tweet.urls);
+    TweetUtils.sort_entities (ref sample_tweet.source_tweet.entities);
 
 
     this.sample_tweet_entry = new TweetListEntry (sample_tweet, null,
@@ -131,7 +142,6 @@ class SettingsDialog : Gtk.Window {
       e.show_all ();
       snippet_list_box.add (e);
     });
-    snippet_list_box.set_header_func (default_header_func);
 
     add_accels ();
     load_geometry ();

@@ -14,7 +14,7 @@
  *  You should have received a copy of the GNU General Public License
  *  along with corebird.  If not, see <http://www.gnu.org/licenses/>.
  */
-class AvatarWidget : Gtk.Image {
+class AvatarWidget : Gtk.Widget {
   private static const int SMALL = 0;
   private static const int LARGE = 1;
   private bool _round = true;
@@ -28,6 +28,24 @@ class AvatarWidget : Gtk.Image {
     }
   }
   public bool verified { get; set; default = false; }
+
+  private Cairo.Surface _surface;
+  public Cairo.Surface surface {
+    get {
+      return _surface;
+    }
+    set {
+      if (this._surface != null)
+        Twitter.unref_avatar (this._surface);
+
+      this._surface = value;
+
+      if (this._surface != null)
+        Twitter.ref_avatar (this._surface);
+
+      this.queue_resize ();
+    }
+  }
 
 
 
@@ -55,9 +73,15 @@ class AvatarWidget : Gtk.Image {
   }
 
   construct {
+    this.set_has_window (false);
     Settings.get ().bind ("round-avatars", this, "make_round",
                           GLib.SettingsBindFlags.DEFAULT);
     get_style_context ().add_class ("avatar");
+  }
+
+  ~AvatarWidget () {
+    if (this._surface != null)
+      Twitter.unref_avatar (this._surface);
   }
 
 
@@ -65,7 +89,7 @@ class AvatarWidget : Gtk.Image {
     int width  = this.get_allocated_width ();
     int height = this.get_allocated_height ();
 
-    if (this.pixbuf == null) {
+    if (this._surface == null) {
       return false;
     }
 
@@ -79,7 +103,7 @@ class AvatarWidget : Gtk.Image {
     var ct = new Cairo.Context (surface);
 
     ct.rectangle (0, 0, width, height);
-    Gdk.cairo_set_source_pixbuf (ct, this.pixbuf, 0, 0);
+    ct.set_source_surface (this._surface, 0, 0);
     ct.fill();
 
     if (_round) {
@@ -128,6 +152,18 @@ class AvatarWidget : Gtk.Image {
     return false;
   }
 
+
+  public override void get_preferred_height (out int minimal,
+                                             out int natural) {
+
+    if (this._surface == null) {
+      minimal = 0;
+      natural = 0;
+    } else {
+      minimal = ((Cairo.ImageSurface)this._surface).get_height ();
+      natural = ((Cairo.ImageSurface)this._surface).get_height ();
+    }
+  }
 }
 
 

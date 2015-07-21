@@ -42,8 +42,8 @@ namespace TextTransform {
                              string  display_text,
                              uint    media_count)
   {
-    return (InlineMediaDownloader.is_media_candidate (url ?? display_text) && media_count == 1) ||
-            display_text.has_prefix ("pic.twitter.com/");
+    return (InlineMediaDownloader.is_media_candidate (url ?? display_text) &&
+            media_count == 1) || display_text.has_prefix ("pic.twitter.com/");
   }
 
   private bool is_hashtag (string entity)
@@ -60,6 +60,12 @@ namespace TextTransform {
     }
     return true;
   }
+
+  public string transform_tweet (MiniTweet tweet, TransformFlags flags)
+  {
+    return transform (tweet.text, tweet.entities, flags, tweet.medias.length);
+  }
+
 
   // XXX We could probably do this a bit faster and simpler (and in one step!)
   //     if we just built the new string from end to start.
@@ -83,7 +89,7 @@ namespace TextTransform {
       } else
         cur_end = entities[i].to;
 
-      if (entities[i].to == cur_end) {
+      if (entities[i].to == cur_end && is_hashtag (entities[i].display_text)) {
         entities[i].info |= TRAILING;
         cur_end = entities[i].from;
       } else break;
@@ -113,7 +119,7 @@ namespace TextTransform {
       }
 
       if (TransformFlags.EXPAND_LINKS in flags) {
-        if (entity.display_text.has_prefix ("@"))
+        if (entity.display_text[0] == '@')
           builder.append (entity.display_text);
         else
           builder.append (entity.target ?? entity.display_text);

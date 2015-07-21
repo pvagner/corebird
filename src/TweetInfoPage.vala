@@ -81,7 +81,6 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
       if (evt.delta_y < 0 && this.vadjustment.value == 0 && reply_indicator.replies_available) {
         int inc = (int)(vadjustment.step_increment * (-evt.delta_y));
         max_size_container.max_size += inc;
-        max_size_container.queue_resize ();
         return true;
       }
       return false;
@@ -119,7 +118,6 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
 
     reply_indicator.replies_available = false;
     max_size_container.max_size = 0;
-    max_size_container.queue_resize ();
 
 
     if (existing) {
@@ -136,8 +134,8 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
     if (mode == BY_INSTANCE) {
       Tweet tweet = (Tweet)args.get_object ("tweet");
 
-      if (tweet.is_retweet)
-        this.tweet_id = tweet.rt_id;
+      if (tweet.retweeted_tweet != null)
+        this.tweet_id = tweet.retweeted_tweet.id;
       else
         this.tweet_id = tweet.id;
 
@@ -154,7 +152,7 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
   }
 
   private void rearrange_tweets (int64 new_id) {
-    assert (new_id != this.tweet_id);
+    //assert (new_id != this.tweet_id);
 
     if (top_list_box.model.contains_id (new_id)) {
       // Move the current tweet down into bottom_list_box
@@ -288,7 +286,7 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
       var statuses_node = root.get_object ().get_array_member ("statuses");
       int64 previous_tweet_id = -1;
       if (top_list_box.model.get_n_items () > 0) {
-        assert (top_list_box.model.get_n_items () == 1);
+        //assert (top_list_box.model.get_n_items () == 1);
         previous_tweet_id = ((Tweet)(top_list_box.model.get_item (0))).id;
       }
       int n_replies = 0;
@@ -375,7 +373,9 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
    */
   private void set_tweet_data (Tweet tweet, string? with = null) {//{{{
     account.user_counter.user_seen (tweet.user_id, tweet.screen_name, tweet.user_name);
-    GLib.DateTime created_at = new GLib.DateTime.from_unix_local (tweet.created_at);
+    GLib.DateTime created_at = new GLib.DateTime.from_unix_local (
+             tweet.retweeted_tweet != null ? tweet.retweeted_tweet.created_at :
+                                             tweet.source_tweet.created_at);
     string time_format = created_at.format ("%x, %X");
     if (with != null) {
       time_format += " via " + with;
@@ -384,10 +384,9 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
     text_label.label = tweet.get_formatted_text ();
     name_button.label = tweet.user_name;
     screen_name_label.label = "@" + tweet.screen_name;
-    avatar_image.pixbuf = tweet.avatar;
+    avatar_image.surface = tweet.avatar;
     tweet.notify["avatar"].connect (() => {
-      avatar_image.pixbuf = tweet.avatar;
-      avatar_image.queue_draw ();
+      avatar_image.surface = tweet.avatar;
     });
     update_rt_fav_labels ();
     time_label.label = time_format;

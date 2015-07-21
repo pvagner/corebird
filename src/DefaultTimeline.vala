@@ -15,12 +15,6 @@
  *  along with corebird.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/*
-  XXX We are tracking min_id and max_id here AGAIN, even though we already
-  do that in TweetModel. We are still adding raw Widgets in HomeTimeline
-  because we need to scroll down, so the values in our TweetModel aren't always
-  100% correct.
- */
 public abstract class DefaultTimeline : ScrollWidget, IPage, ITimeline {
   protected bool initialized = false;
   public int id                          { get; set; }
@@ -67,8 +61,6 @@ public abstract class DefaultTimeline : ScrollWidget, IPage, ITimeline {
       mark_seen_on_scroll (vadjustment.value);
     });
 
-
-    tweet_list.set_sort_func(ITwitterItem.sort_func);
     this.add (tweet_list);
 
     tweet_list.row_activated.connect ((row) => {
@@ -85,6 +77,7 @@ public abstract class DefaultTimeline : ScrollWidget, IPage, ITimeline {
       this.load_newest ();
     });
 
+    this.hexpand = true;
   }
 
   public virtual void on_join (int page_id, Bundle? args) {
@@ -234,12 +227,14 @@ public abstract class DefaultTimeline : ScrollWidget, IPage, ITimeline {
         flags |= Tweet.HIDDEN_RT_BY_FOLLOWEE;
 
     /* third case */
-    if (t.rt_by_id == account.id)
+    if (t.retweeted_tweet != null &&
+        t.retweeted_tweet.author.id == account.id)
       flags |= Tweet.HIDDEN_FORCE;
 
     /* Fourth case */
     foreach (int64 id in account.disabled_rts)
-      if (id == t.rt_by_id) {
+      if (t.retweeted_tweet != null &&
+          id == t.retweeted_tweet.id) {
         flags |= Tweet.HIDDEN_RTS_DISABLED;
         break;
       }
@@ -248,7 +243,8 @@ public abstract class DefaultTimeline : ScrollWidget, IPage, ITimeline {
     /* Fifth case */
     foreach (Gtk.Widget w in tweet_list.get_children ()) {
       if (w is TweetListEntry) {
-        if (((TweetListEntry)w).tweet.rt_id == t.rt_id) {
+        var tt = ((TweetListEntry)w).tweet;
+        if (tt.retweeted_tweet != null && tt.retweeted_tweet.id == t.retweeted_tweet.id) {
           flags |= Tweet.HIDDEN_FORCE;
           break;
         }

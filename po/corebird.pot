@@ -8,13 +8,13 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2015-06-03 22:04+0200\n"
+"POT-Creation-Date: 2015-07-05 11:29+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "Language: \n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=CHARSET\n"
+"Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
 
@@ -28,7 +28,7 @@ msgstr ""
 #: ../ui/list-list-entry.ui.h:1 ../ui/list-statuses-page.ui.h:8
 #: ../ui/filter-list-entry.ui.h:1 ../ui/modify-filter-dialog.ui.h:2
 #: ../ui/user-filter-entry.ui.h:1 ../ui/account-dialog.ui.h:2
-#: ../ui/image-crop-dialog.ui.h:1
+#: ../ui/image-crop-dialog.ui.h:1 ../ui/modify-snippet-dialog.ui.h:2
 msgid "Cancel"
 msgstr ""
 
@@ -44,6 +44,7 @@ msgstr ""
 #: ../src/widgets/MultiMediaWidget.vala:153
 #: ../src/window/ImageCropDialog.vala:98 ../ui/list-statuses-page.ui.h:6
 #: ../ui/modify-filter-dialog.ui.h:3 ../ui/account-dialog.ui.h:3
+#: ../ui/modify-snippet-dialog.ui.h:3
 msgid "Save"
 msgstr ""
 
@@ -111,7 +112,7 @@ msgstr ""
 msgid "Save Original"
 msgstr ""
 
-#: ../src/widgets/MultiMediaWidget.vala:74 ../src/TweetInfoPage.vala:424
+#: ../src/widgets/MultiMediaWidget.vala:74 ../src/TweetInfoPage.vala:426
 msgid "Open in Browser"
 msgstr ""
 
@@ -133,19 +134,19 @@ msgstr ""
 msgid "%s retweeted %s"
 msgstr ""
 
-#: ../src/HomeTimeline.vala:112
+#: ../src/HomeTimeline.vala:113
 #, c-format
 msgid "%s tweeted"
 msgstr ""
 
-#: ../src/HomeTimeline.vala:119
+#: ../src/HomeTimeline.vala:120
 #, c-format
 msgid "%d new Tweet!"
 msgid_plural "%d new Tweets!"
 msgstr[0] ""
 msgstr[1] ""
 
-#: ../src/HomeTimeline.vala:170
+#: ../src/HomeTimeline.vala:171
 msgid "Home"
 msgstr ""
 
@@ -177,37 +178,37 @@ msgstr[1] ""
 msgid "Lists"
 msgstr ""
 
-#: ../src/ProfilePage.vala:300
+#: ../src/ProfilePage.vala:299
 msgid "Protected profile"
 msgstr ""
 
-#: ../src/ProfilePage.vala:471
+#: ../src/ProfilePage.vala:470
 #, c-format
 msgid "Tweet to @%s"
 msgstr ""
 
-#: ../src/ProfilePage.vala:570
+#: ../src/ProfilePage.vala:569
 msgid "Unfollow"
 msgstr ""
 
-#: ../src/ProfilePage.vala:574
+#: ../src/ProfilePage.vala:573
 msgid "Follow"
 msgstr ""
 
-#: ../src/TweetInfoPage.vala:415
+#: ../src/TweetInfoPage.vala:417
 msgid "Retweets"
 msgstr ""
 
-#: ../src/TweetInfoPage.vala:416 ../src/FavoritesTimeline.vala:92
-#: ../src/FavoritesTimeline.vala:96
+#: ../src/TweetInfoPage.vala:418 ../src/FavoritesTimeline.vala:91
+#: ../src/FavoritesTimeline.vala:95
 msgid "Favorites"
 msgstr ""
 
-#: ../src/TweetInfoPage.vala:424
+#: ../src/TweetInfoPage.vala:426
 msgid "Source"
 msgstr ""
 
-#: ../src/TweetInfoPage.vala:435
+#: ../src/TweetInfoPage.vala:437
 msgid "Tweet Details"
 msgstr ""
 
@@ -225,21 +226,21 @@ msgstr ""
 msgid "%dh"
 msgstr ""
 
-#: ../src/SearchPage.vala:264 ../src/SearchPage.vala:273
+#: ../src/SearchPage.vala:279 ../src/SearchPage.vala:288
 #: ../ui/search-page.ui.h:1
 msgid "Search"
 msgstr ""
 
-#: ../src/Corebird.vala:151
+#: ../src/Corebird.vala:150
 msgid "Open Account"
 msgstr ""
 
-#: ../src/MentionsTimeline.vala:100
+#: ../src/MentionsTimeline.vala:102
 #, c-format
 msgid "New Mention from @%s"
 msgstr ""
 
-#: ../src/MentionsTimeline.vala:133 ../src/MentionsTimeline.vala:138
+#: ../src/MentionsTimeline.vala:135 ../src/MentionsTimeline.vala:140
 msgid "Mentions"
 msgstr ""
 
@@ -280,6 +281,12 @@ msgid "Minimum height: %d pixel"
 msgid_plural "Minimum height: %d pixels"
 msgstr[0] ""
 msgstr[1] ""
+
+#: ../src/window/SettingsDialog.vala:81
+msgid ""
+"Hey, check out this new #Corebird version! \\ (•◡•) / #cool "
+"#newisalwaysbetter"
+msgstr ""
 
 #: ../ui/settings-dialog.ui.h:1 ../ui/menu.ui.h:1
 msgid "Settings"
@@ -371,7 +378,7 @@ msgid "No snippets configured."
 msgstr ""
 
 #: ../ui/settings-dialog.ui.h:23
-msgid "Snippets allow you to do THINGS!"
+msgid "You can activate snippets by writing the keyword and pressing TAB."
 msgstr ""
 
 #: ../ui/settings-dialog.ui.h:24
@@ -416,7 +423,7 @@ msgstr ""
 
 #: ../ui/tweet-list-entry.ui.h:2 ../ui/list-list-entry.ui.h:4
 #: ../ui/list-statuses-page.ui.h:7 ../ui/filter-list-entry.ui.h:2
-#: ../ui/account-dialog.ui.h:7
+#: ../ui/account-dialog.ui.h:7 ../ui/modify-snippet-dialog.ui.h:6
 msgid "Delete"
 msgstr ""
 
@@ -610,6 +617,18 @@ msgstr ""
 
 #: ../ui/image-crop-dialog.ui.h:3
 msgid "Back"
+msgstr ""
+
+#: ../ui/modify-snippet-dialog.ui.h:1
+msgid "Add New Snippet"
+msgstr ""
+
+#: ../ui/modify-snippet-dialog.ui.h:4
+msgid "Keyword"
+msgstr ""
+
+#: ../ui/modify-snippet-dialog.ui.h:5
+msgid "Replacement"
 msgstr ""
 
 #: ../data/org.baedert.corebird.appdata.xml.in.h:1
