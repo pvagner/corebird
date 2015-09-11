@@ -24,7 +24,7 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
     {"quote",  quote_activated},
   };
 
-  public int unread_count { get{return 0;} set {} }
+  public int unread_count { get {return 0;} }
   public int id                         { get; set; }
   public unowned MainWindow main_window { get; set; }
   public unowned Account account { get; set; }
@@ -38,6 +38,7 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
   private string screen_name;
   private bool values_set = false;
   private Tweet tweet;
+  private GLib.SimpleActionGroup actions;
 
   [GtkChild]
   private MultiMediaWidget mm_widget;
@@ -85,7 +86,6 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
       }
       return false;
     });
-    top_list_box.set_sort_func (ITwitterItem.sort_func_inv);
     bottom_list_box.row_activated.connect ((row) => {
       var bundle = new Bundle ();
       bundle.put_int ("mode", TweetInfoPage.BY_INSTANCE);
@@ -101,9 +101,9 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
       main_window.main_widget.switch_page (Page.TWEET_INFO, bundle);
     });
 
-    GLib.SimpleActionGroup actions = new GLib.SimpleActionGroup ();
-    actions.add_action_entries (action_entries, this);
-    this.insert_action_group ("tweet", actions);
+    this.actions = new GLib.SimpleActionGroup ();
+    this.actions.add_action_entries (action_entries, this);
+    this.insert_action_group ("tweet", this.actions);
   }
 
   public void on_join (int page_id, Bundle? args) {
@@ -235,9 +235,20 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
 
   [GtkCallback]
   private void name_button_clicked_cb () {
+    int64 id;
+    string screen_name;
+
+    if (this.tweet.retweeted_tweet != null) {
+      id = this.tweet.retweeted_tweet.author.id;
+      screen_name = this.tweet.retweeted_tweet.author.screen_name;
+    } else {
+      id = this.tweet.source_tweet.author.id;
+      screen_name = this.tweet.source_tweet.author.screen_name;
+    }
+
     var bundle = new Bundle ();
-    bundle.put_int64 ("user_id", tweet.user_id);
-    bundle.put_string ("screen_name", tweet.screen_name);
+    bundle.put_int64 ("user_id", id);
+    bundle.put_string ("screen_name", screen_name);
     main_window.main_widget.switch_page (Page.PROFILE, bundle);
   }
 
@@ -251,6 +262,7 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
     call.set_method ("GET");
     call.set_function ("1.1/statuses/show.json");
     call.add_param ("id", tweet_id.to_string ());
+    call.add_param ("include_my_retweet", "true");
     TweetUtils.load_threaded.begin (call, (_, res) => {
       Json.Node? root = TweetUtils.load_threaded.end (res);
 
@@ -382,7 +394,7 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
     }
 
     text_label.label = tweet.get_formatted_text ();
-    name_button.label = tweet.user_name;
+    name_button.set_markup (tweet.user_name);
     screen_name_label.label = "@" + tweet.screen_name;
     avatar_image.surface = tweet.avatar;
     tweet.notify["avatar"].connect (() => {
@@ -393,6 +405,7 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
     retweet_button.active = tweet.retweeted;
     favorite_button.active = tweet.favorited;
     avatar_image.verified = tweet.verified;
+
 
     set_source_link (tweet.id, tweet.screen_name);
 
@@ -405,8 +418,11 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
 
     if (tweet.user_id == account.id || tweet.protected) {
       retweet_button.hide ();
+
+      ((GLib.SimpleAction)actions.lookup_action ("quote")).set_enabled (false);
     } else {
       retweet_button.show ();
+      ((GLib.SimpleAction)actions.lookup_action ("quote")).set_enabled (true);
     }
   } //}}}
 

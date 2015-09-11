@@ -15,7 +15,6 @@
  *  along with corebird.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
 namespace InlineMediaDownloader {
 
   public async void load_media (MiniTweet t, Media media) {
@@ -54,7 +53,8 @@ namespace InlineMediaDownloader {
            url.has_prefix ("http://instagram.com/p/") ||
            url.has_prefix ("https://instagr.am") ||
            url.has_prefix ("https://instagram.com/p/") ||
-           url.has_prefix ("http://i.imgur.com") ||
+           (url.has_prefix ("http://i.imgur.com") && !url.has_suffix ("gifv")) ||
+           (url.has_prefix ("https://i.imgur.com") && !url.has_suffix ("gifv")) ||
            url.has_prefix ("http://d.pr/i/") ||
            url.has_prefix ("http://ow.ly/i/") ||
            url.has_prefix ("http://www.flickr.com/photos/") ||
@@ -108,21 +108,6 @@ namespace InlineMediaDownloader {
 
     media.path = get_media_path (t, media);
     media.thumb_path = get_thumb_path (t, media);
-    string ext = Utils.get_file_type (media.url);
-    {
-      if(ext.length == 0)
-        ext = "png";
-
-      ext = ext.down();
-      int qm_index;
-      if ((qm_index = ext.index_of_char ('?')) != -1) {
-        ext = ext.substring (0, qm_index);
-      }
-
-      if (ext == "jpg")
-        ext = "jpeg";
-    }
-
 
     GLib.OutputStream thumb_out_stream = null;
     GLib.OutputStream media_out_stream = null;
@@ -254,7 +239,7 @@ namespace InlineMediaDownloader {
     try {
       anim = yield new Gdk.PixbufAnimation.from_stream_async (in_stream, null);
     } catch (GLib.Error e) {
-      warning (e.message);
+      warning ("%s: %s", media.url, e.message);
       mark_invalid (media, in_stream, thumb_out_stream);
       return;
     }

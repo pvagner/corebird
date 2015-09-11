@@ -106,29 +106,12 @@ public class Twitter : GLib.Object {
    *         if it has to be downloaded first, in which case the AvatarDownloadedFunc
    *         will be called after that's finished.
    */
-  public Cairo.Surface? get_avatar (string url, owned AvatarDownloadedFunc? func = null) { // {{{
+  public Cairo.Surface? get_avatar (string url, owned AvatarDownloadedFunc? func = null, int size = 48) { // {{{
     Cairo.Surface? a = avatars.get (url);
     bool has_key = avatars.has_key (url);
 
     if (a != null) {
       return a;
-    }
-
-    string avatar_name = Utils.get_avatar_name (url);
-    string avatar_dest = Dirs.cache ("assets/avatars/" + avatar_name);
-    // If the image already exists but is not loaded in ram yet,
-    // just load it and return it.
-    try {
-      var p = new Gdk.Pixbuf.from_file (avatar_dest);
-      var s = Gdk.cairo_surface_create_from_pixbuf (p, 1, null);
-      avatars.set (url, s);
-      return s;
-    } catch (GLib.Error e) {
-      if (!(e is GLib.FileError.NOENT)) {
-        critical ("Error while loading avatar `%s`: %s", url, e.message);
-        this.avatars.set (url, no_avatar);
-        return no_avatar;
-      }
     }
 
     // Someone is already downloading the avatar
@@ -142,7 +125,7 @@ public class Twitter : GLib.Object {
     } else {
       // download the avatar
       avatars.set (url, null);
-      TweetUtils.download_avatar.begin (url, (obj, res) => {
+      TweetUtils.download_avatar.begin (url, size, (obj, res) => {
         Gdk.Pixbuf? avatar = null;
         try {
           avatar = TweetUtils.download_avatar.end (res);

@@ -51,6 +51,19 @@ namespace TextTransform {
     return entity[0] == '#';
   }
 
+  private bool is_link (string? target)
+  {
+    return target != null && (target.has_prefix ("http://") || target.has_prefix ("https://"));
+  }
+
+  private bool is_quote_link (ref TextEntity entity, int64 quote_id)
+  {
+    if (entity.target == null) return false;
+
+    return (entity.target.has_prefix ("https://twitter.com/") &&
+            entity.target.has_suffix ("/status/" + quote_id.to_string ()));
+  }
+
   private bool is_whitespace (string s)
   {
     unichar c;
@@ -61,9 +74,13 @@ namespace TextTransform {
     return true;
   }
 
-  public string transform_tweet (MiniTweet tweet, TransformFlags flags)
+  public string transform_tweet (MiniTweet tweet, TransformFlags flags, int64 quote_id = -1)
   {
-    return transform (tweet.text, tweet.entities, flags, tweet.medias.length);
+    return transform (tweet.text,
+                      tweet.entities,
+                      flags,
+                      tweet.medias.length,
+                      quote_id);
   }
 
 
@@ -72,7 +89,8 @@ namespace TextTransform {
   public string transform (string         text,
                            TextEntity[]   entities,
                            TransformFlags flags,
-                           uint           media_count = 0)
+                           uint           media_count = 0,
+                           int64          quote_id = -1)
   {
     StringBuilder builder = new StringBuilder ();
     uint last_end = 0;
@@ -89,31 +107,40 @@ namespace TextTransform {
       } else
         cur_end = entities[i].to;
 
-      if (entities[i].to == cur_end && is_hashtag (entities[i].display_text)) {
+      if (entities[i].to == cur_end &&
+          (is_hashtag (entities[i].display_text) || is_link (entities[i].target))) {
         entities[i].info |= TRAILING;
         cur_end = entities[i].from;
       } else break;
     }
 
 
+    bool last_entity_was_trailing = false;
     foreach (TextEntity entity in entities) {
       /* Append part before this entity */
-      builder.append (text.substring (text.index_of_nth_char (last_end),
+      string before = text.substring (text.index_of_nth_char (last_end),
                                       text.index_of_nth_char (entity.from) -
-                                      text.index_of_nth_char (last_end)));
+                                      text.index_of_nth_char (last_end));
+
+      if (!(last_entity_was_trailing && is_whitespace (before)))
+        builder.append (before);
 
       if (TransformFlags.REMOVE_TRAILING_HASHTAGS in flags &&
           (entity.info & TRAILING) > 0 &&
           is_hashtag (entity.display_text)) {
         last_end = entity.to;
+        last_entity_was_trailing = true;
         continue;
       }
+
+      last_entity_was_trailing = false;
 
       /* Skip the entire entity if we should remove media links AND
          it is a media link. */
 
-      if (TransformFlags.REMOVE_MEDIA_LINKS in flags &&
-          is_media_url (entity.target, entity.display_text, media_count)) {
+      if ((TransformFlags.REMOVE_MEDIA_LINKS in flags &&
+          is_media_url (entity.target, entity.display_text, media_count)) ||
+          (quote_id != 0 && is_quote_link (ref entity, quote_id))) {
         last_end = entity.to;
         continue;
       }
@@ -132,7 +159,7 @@ namespace TextTransform {
         /* Only set the tooltip if there actually is one */
         if (entity.tooltip_text != null) {
           builder.append (" title=\"")
-                 .append (entity.tooltip_text.replace ("&", "&amp;"))
+                 .append (entity.tooltip_text.replace ("&", "&amp;amp;"))
                  .append ("\"");
         }
 

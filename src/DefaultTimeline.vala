@@ -22,8 +22,8 @@ public abstract class DefaultTimeline : ScrollWidget, IPage, ITimeline {
   public int unread_count {
     set {
       _unread_count = value;
+      debug ("New unread count: %d", value);
       tool_button.show_badge = (_unread_count > 0);
-      tool_button.queue_draw();
     }
     get {
       return this._unread_count;
@@ -159,7 +159,8 @@ public abstract class DefaultTimeline : ScrollWidget, IPage, ITimeline {
         }
 
         tweet_list.model.remove_last_n_visible (tweet_list.model.get_n_items () - ITimeline.REST);
-        return false;
+        tweet_remove_timeout = 0;
+        return GLib.Source.REMOVE;
       });
     } else if (tweet_remove_timeout != 0) {
       GLib.Source.remove (tweet_remove_timeout);
@@ -167,25 +168,13 @@ public abstract class DefaultTimeline : ScrollWidget, IPage, ITimeline {
     }
   } // }}}
 
-  public void delete_tweet (int64 tweet_id) { // {{{
-    foreach (Gtk.Widget w in tweet_list.get_children ()) {
-      if (w == null || !(w is TweetListEntry))
-        continue;
+  public void delete_tweet (int64 tweet_id) {
+    bool was_seen;
+    bool removed = this.tweet_list.model.delete_id (tweet_id, out was_seen);
 
-      var tle = (TweetListEntry) w;
-      if (tle.tweet.id == tweet_id) {
-        if (!tle.tweet.seen) {
-          tweet_list.remove (tle);
-          this.unread_count --;
-        }else
-          tle.sensitive = false;
-        return;
-      } else if (tle.tweet.retweeted && tle.tweet.my_retweet == tweet_id) {
-        tle.tweet.retweeted = false;
-        return;
-      }
-    }
-  } // }}}
+    if (removed && !was_seen)
+      this.unread_count --;
+  }
 
   public void toggle_favorite (int64 id, bool mode) { // {{{
     var tweets = tweet_list.get_children ();
@@ -231,10 +220,11 @@ public abstract class DefaultTimeline : ScrollWidget, IPage, ITimeline {
         t.retweeted_tweet.author.id == account.id)
       flags |= Tweet.HIDDEN_FORCE;
 
+
+
     /* Fourth case */
     foreach (int64 id in account.disabled_rts)
-      if (t.retweeted_tweet != null &&
-          id == t.retweeted_tweet.id) {
+      if (id == t.source_tweet.author.id) {
         flags |= Tweet.HIDDEN_RTS_DISABLED;
         break;
       }
@@ -281,7 +271,9 @@ public abstract class DefaultTimeline : ScrollWidget, IPage, ITimeline {
   }
 
   private void stream_resumed_cb () {
-    // XXX If load_newest failed, the list still gets cleared...
+    if (this.tweet_list.model.get_n_items () == 0)
+      return;
+
     var call = account.proxy.new_call ();
     call.set_function (this.function);
     call.set_method ("GET");

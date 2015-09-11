@@ -59,6 +59,12 @@ public class TweetListEntry : ITwitterItem, Gtk.ListBoxRow {
   private Gtk.Box action_box;
   [GtkChild]
   private Gtk.Label quote_label;
+  [GtkChild]
+  private TextButton quote_name;
+  [GtkChild]
+  private Gtk.Label quote_screen_name;
+  [GtkChild]
+  private Gtk.Grid quote_grid;
 
 
   private bool _read_only = false;
@@ -105,7 +111,7 @@ public class TweetListEntry : ITwitterItem, Gtk.ListBoxRow {
     this.main_window = main_window;
 
     name_button.set_markup (tweet.user_name);
-    screen_name_label.label = "@"+tweet.screen_name;
+    screen_name_label.label = "@" + tweet.screen_name;
     avatar_image.surface = tweet.avatar;
     avatar_image.verified = tweet.verified;
     text_label.label = tweet.get_trimmed_text ();
@@ -114,7 +120,7 @@ public class TweetListEntry : ITwitterItem, Gtk.ListBoxRow {
       rt_label.show ();
       rt_image.show ();
       rt_label.label = @"<span underline='none'><a href=\"@$(tweet.source_tweet.author.id)/" +
-                       @"$(tweet.source_tweet.author.screen_name)\"" +
+                       @"@$(tweet.source_tweet.author.screen_name)\"" +
                        @"title=\"@$(tweet.source_tweet.author.screen_name)\">" +
                        @"$(tweet.source_tweet.author.user_name)</a></span>";
     } else {
@@ -123,20 +129,13 @@ public class TweetListEntry : ITwitterItem, Gtk.ListBoxRow {
     }
 
     if (tweet.quoted_tweet != null) {
-      quote_label.show ();
-      var b = new StringBuilder ();
-      b.append (TextTransform.transform_tweet (tweet.quoted_tweet,
-                                               Settings.get_text_transform_flags ()));
-      b.append (" — <span underline=\"none\"><a href=\"@")
-       .append (tweet.quoted_tweet.author.id.to_string ())
-       .append ("/@")
-       .append (tweet.quoted_tweet.author.screen_name)
-       .append ("\" title=\"")
-       .append (tweet.quoted_tweet.author.user_name)
-       .append ("\">@")
-       .append (tweet.quoted_tweet.author.screen_name)
-       .append ("</a></span>");
-       quote_label.label = b.str;
+      quote_label.label = TextTransform.transform_tweet (tweet.quoted_tweet,
+                                                         Settings.get_text_transform_flags ());
+      quote_name.set_markup (tweet.quoted_tweet.author.user_name);
+      quote_screen_name.label = "@" + tweet.quoted_tweet.author.screen_name;
+
+      quote_grid.show ();
+      quote_grid.show_all ();
     }
 
     retweet_button.active = tweet.retweeted;
@@ -148,6 +147,7 @@ public class TweetListEntry : ITwitterItem, Gtk.ListBoxRow {
     tweet.notify["favorited"].connect (favorited_cb);
 
     tweet.hidden_flags_changed.connect (hidden_flags_changed_cb);
+    tweet.notify["deleted"].connect (tweet_deleted_cb);
 
     if (tweet.reply_id == 0)
       conversation_image.unparent ();
@@ -171,10 +171,12 @@ public class TweetListEntry : ITwitterItem, Gtk.ListBoxRow {
     actions.add_action_entries (action_entries, this);
     this.insert_action_group ("tweet", actions);
 
-    if (tweet.user_id != account.id) {
+    if (tweet.user_id != account.id)
       ((GLib.SimpleAction)actions.lookup_action ("delete")).set_enabled (false);
-    }
 
+    if (tweet.user_id == account.id ||
+        tweet.protected)
+      ((GLib.SimpleAction)actions.lookup_action ("quote")).set_enabled (false);
 
     reply_tweet.connect (reply_tweet_activated);
     delete_tweet.connect (delete_tweet_activated);
@@ -306,16 +308,37 @@ public class TweetListEntry : ITwitterItem, Gtk.ListBoxRow {
 
   [GtkCallback]
   private void name_button_clicked_cb () {
+    int64 user_id;
+    string screen_name;
+
+    if (tweet.retweeted_tweet != null) {
+      user_id = tweet.retweeted_tweet.author.id;
+      screen_name = tweet.retweeted_tweet.author.screen_name;
+    } else {
+      user_id = tweet.source_tweet.author.id;
+      screen_name = tweet.source_tweet.author.screen_name;
+    }
+
     var bundle = new Bundle ();
-    bundle.put_int64 ("user_id", tweet.user_id);
-    bundle.put_string ("screen_name", tweet.screen_name);
+    bundle.put_int64 ("user_id", user_id);
+    bundle.put_string ("screen_name", screen_name);
     main_window.main_widget.switch_page (Page.PROFILE, bundle);
   }
+
+  [GtkCallback]
+  private void quote_name_button_clicked_cb () {
+    assert (tweet.quoted_tweet != null);
+    var bundle = new Bundle ();
+    bundle.put_int64 ("user_id", tweet.quoted_tweet.author.id);
+    bundle.put_string ("screen_name", tweet.quoted_tweet.author.screen_name);
+    main_window.main_widget.switch_page (Page.PROFILE, bundle);
+  }
+
+
   [GtkCallback]
   private void reply_button_clicked_cb () {
     ComposeTweetWindow ctw = new ComposeTweetWindow (this.main_window, this.account, this.tweet,
-                                                     ComposeTweetWindow.Mode.REPLY,
-                                                     this.main_window.get_application ());
+                                                     ComposeTweetWindow.Mode.REPLY);
     ctw.show ();
     if (shows_actions)
       toggle_mode ();
@@ -323,16 +346,14 @@ public class TweetListEntry : ITwitterItem, Gtk.ListBoxRow {
 
   private void quote_activated () {
     ComposeTweetWindow ctw = new ComposeTweetWindow (this.main_window, this.account, this.tweet,
-                                                     ComposeTweetWindow.Mode.QUOTE,
-                                                     this.main_window.get_application ());
+                                                     ComposeTweetWindow.Mode.QUOTE);
     ctw.show ();
     toggle_mode ();
   }
 
   private void reply_tweet_activated () {
     ComposeTweetWindow ctw = new ComposeTweetWindow (this.main_window, this.account, this.tweet,
-                                                     ComposeTweetWindow.Mode.REPLY,
-                                                     this.main_window.get_application ());
+                                                     ComposeTweetWindow.Mode.REPLY);
     ctw.show ();
   }
 
@@ -347,6 +368,9 @@ public class TweetListEntry : ITwitterItem, Gtk.ListBoxRow {
     if (this._read_only) {
       return false;
     }
+
+    this.grab_focus ();
+
     return TweetUtils.activate_link (uri, main_window);
   }
 
@@ -370,6 +394,12 @@ public class TweetListEntry : ITwitterItem, Gtk.ListBoxRow {
     string new_text = TextTransform.transform_tweet (tweet.retweeted_tweet ?? tweet.source_tweet,
                                                      flags);
     this.text_label.label = new_text;
+
+    if (tweet.quoted_tweet != null) {
+      string new_quote_text = TextTransform.transform_tweet (tweet.quoted_tweet,
+                                                             flags);
+      this.quote_label.label = new_quote_text;
+    }
   }
 
   private void hidden_flags_changed_cb () {
@@ -377,6 +407,15 @@ public class TweetListEntry : ITwitterItem, Gtk.ListBoxRow {
       this.hide ();
     else
       this.show ();
+  }
+
+  private void tweet_deleted_cb () {
+#if DEBUG
+    assert (this.sensitive != tweet.deleted);
+#endif
+
+    this.sensitive = !tweet.deleted;
+    stack.visible_child = grid;
   }
 
 

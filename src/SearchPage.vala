@@ -55,6 +55,8 @@ class SearchPage : IPage, Gtk.Box {
     this.id = id;
     this.account = account;
 
+    /* We are slightly abusing the TweetListBox here */
+    tweet_list.bind_model (null, null);
     tweet_list.set_header_func (header_func);
     tweet_list.set_sort_func (ITwitterItem.sort_func);
     tweet_list.row_activated.connect (row_activated_cb);
@@ -104,6 +106,9 @@ class SearchPage : IPage, Gtk.Box {
         // We are still using raw widgets here.
         tweet_list.remove (w);
       }
+      tweet_list.get_placeholder ().hide ();
+
+      this.remove_content_timeout = 0;
 
       return GLib.Source.REMOVE;
     });
@@ -175,7 +180,8 @@ class SearchPage : IPage, Gtk.Box {
     TweetUtils.load_threaded.begin (user_call, (_, res) => {
       Json.Node? root = TweetUtils.load_threaded.end (res);
       if (root == null) {
-        collect_obj.emit ();
+        if (!collect_obj.done)
+          collect_obj.emit ();
         return;
       }
 
@@ -200,7 +206,8 @@ class SearchPage : IPage, Gtk.Box {
         entry.avatar = user_obj.get_string_member ("profile_image_url");
         entry.user_id = user_obj.get_int_member ("id");
         entry.show_settings = false;
-        entry.visible = false;
+        if (!collect_obj.done)
+          entry.visible = false;
         tweet_list.add (entry);
       });
       if (users.get_length () > USER_COUNT) {
@@ -211,8 +218,9 @@ class SearchPage : IPage, Gtk.Box {
       } else {
         load_more_entry.hide ();
       }
-      collect_obj.emit ();
 
+      if (!collect_obj.done)
+        collect_obj.emit ();
     });
 
   } // }}}
@@ -232,7 +240,8 @@ class SearchPage : IPage, Gtk.Box {
       Json.Node? root = TweetUtils.load_threaded.end (res);
 
       if (root == null) {
-        collect_obj.emit ();
+        if (!collect_obj.done)
+          collect_obj.emit ();
         return;
       }
 
@@ -246,7 +255,6 @@ class SearchPage : IPage, Gtk.Box {
       if (n_results <= 0)
         tweet_list.set_empty ();
 
-
       statuses.foreach_element ((array, index, node) => {
         var tweet = new Tweet ();
         tweet.load_from_json (node, now, account);
@@ -254,13 +262,17 @@ class SearchPage : IPage, Gtk.Box {
           lowest_tweet_id = tweet.id;
         var entry = new TweetListEntry (tweet, main_window, account);
         delta_updater.add (entry);
-        entry.visible = false;
+        if (!collect_obj.done)
+          entry.visible = false;
+        else
+          entry.show ();
+
         tweet_list.add (entry);
       });
       loading_tweets = false;
-      collect_obj.emit ();
 
-
+      if (!collect_obj.done)
+        collect_obj.emit ();
     });
 
   } // }}}

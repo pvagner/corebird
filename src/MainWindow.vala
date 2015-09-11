@@ -97,6 +97,17 @@ public class MainWindow : Gtk.ApplicationWindow {
 
     this.add_action_entries (win_entries, this);
 
+
+    headerbar.key_press_event.connect ((evt) => {
+      if (evt.keyval == Gdk.Key.Down && main_widget != null) {
+        main_widget.get_page (main_widget.cur_page_id).focus (Gtk.DirectionType.RIGHT);
+        return true;
+      }
+      return false;
+    });
+
+
+
     add_accels();
     load_geometry ();
   }
@@ -153,7 +164,6 @@ public class MainWindow : Gtk.ApplicationWindow {
 
     if (account != null && account.screen_name != Account.DUMMY) {
       main_widget = new MainWidget (account, this, cb);
-      main_widget.sidebar_size_group.add_widget (account_button);
       main_widget.show_all ();
       this.add (main_widget);
       main_widget.switch_page (0);
@@ -255,8 +265,7 @@ public class MainWindow : Gtk.ApplicationWindow {
   private void show_hide_compose_window () {
     if (compose_tweet_window == null) {
       compose_tweet_window = new ComposeTweetWindow (this, account, null,
-                                                     ComposeTweetWindow.Mode.NORMAL,
-                                                     get_application ());
+                                                     ComposeTweetWindow.Mode.NORMAL);
       compose_tweet_window.show ();
       compose_tweet_window.hide.connect (() => {
         compose_tweet_button.active = false;
