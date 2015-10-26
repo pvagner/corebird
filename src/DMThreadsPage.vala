@@ -46,9 +46,10 @@ class DMThreadsPage : IPage, IMessageReceiver, ScrollWidget {
   private Collect dm_download_collect;
 
 
-  public DMThreadsPage (int id, Account account) {
+  public DMThreadsPage (int id, Account account, DeltaUpdater delta_updater) {
     this.id = id;
     this.account = account;
+    this.delta_updater = delta_updater;
     this.dm_download_collect = new Collect (2);
     thread_list.set_header_func (default_header_func);
     thread_list.set_sort_func (dm_thread_entry_sort_func);
@@ -85,7 +86,6 @@ class DMThreadsPage : IPage, IMessageReceiver, ScrollWidget {
     });
 
     thread_list.add (start_conversation_entry);
-    load_cached ();
   }
 
   public void stream_message_received (StreamMessageType type, Json.Node root) {
@@ -109,6 +109,7 @@ class DMThreadsPage : IPage, IMessageReceiver, ScrollWidget {
 
 
     if (!initialized) {
+      load_cached ();
       load_newest ();
       initialized = true;
     }
@@ -118,7 +119,7 @@ class DMThreadsPage : IPage, IMessageReceiver, ScrollWidget {
     start_conversation_entry.unreveal ();
   }
 
-  public void load_cached () { // {{{
+  public void load_cached () {
     //Load max message id
 
     max_received_id = account.db.select ("dms").cols ("id")
@@ -133,14 +134,12 @@ class DMThreadsPage : IPage, IMessageReceiver, ScrollWidget {
 
       var entry = new DMThreadEntry (user_id);
       entry.screen_name =  vals[1];
-      entry.name = vals[5];
+      entry.name = vals[5].replace ("&", "&amp;");
       entry.last_message = vals[2];
       entry.last_message_id = int64.parse(vals[3]);
       entry.unread_count = 0;
-      entry.avatar = Twitter.get ().get_avatar (vals[4], (a) => {
-        entry.avatar = a;
-      });
-
+      entry.avatar_url = vals[4];
+      entry.load_avatar ();
 
       thread_list.add (entry);
       thread_map.set (user_id, entry);
@@ -156,7 +155,7 @@ class DMThreadsPage : IPage, IMessageReceiver, ScrollWidget {
       row.activatable = false;
       thread_list.add (row);
     }
-  } // }}}
+  }
 
   public void load_newest () { // {{{
     dm_download_collect.finished.connect (() => {
@@ -170,9 +169,14 @@ class DMThreadsPage : IPage, IMessageReceiver, ScrollWidget {
     call.add_param ("skip_status", "true");
     call.add_param ("since_id", max_received_id.to_string ());
     call.add_param ("count", "200");
-    TweetUtils.load_threaded.begin (call, (obj, res) => {
-      Json.Node? root = TweetUtils.load_threaded.end (res);
-      on_dm_result (root);
+    TweetUtils.load_threaded.begin (call, null, (obj, res) => {
+      try {
+        Json.Node? root = TweetUtils.load_threaded.end (res);
+        on_dm_result (root);
+      } catch (GLib.Error e) {
+        warning (e.message);
+        on_dm_result (null);
+      }
     });
 
     var sent_call = account.proxy.new_call ();
@@ -181,9 +185,14 @@ class DMThreadsPage : IPage, IMessageReceiver, ScrollWidget {
     sent_call.add_param ("since_id", max_sent_id.to_string ());
     sent_call.add_param ("count", "200");
     sent_call.set_method ("GET");
-    TweetUtils.load_threaded.begin (sent_call, (obj, res) => {
-      Json.Node? root = TweetUtils.load_threaded.end (res);
-      on_dm_result (root);
+    TweetUtils.load_threaded.begin (sent_call, null, (obj, res) => {
+      try {
+        Json.Node? root = TweetUtils.load_threaded.end (res);
+        on_dm_result (root);
+      } catch (GLib.Error e) {
+        warning (e.message);
+        on_dm_result (null);
+      }
     });
 
   } // }}}
@@ -256,7 +265,7 @@ class DMThreadsPage : IPage, IMessageReceiver, ScrollWidget {
     var thread_entry = new DMThreadEntry (sender_id);
     var author = dm_obj.get_string_member ("sender_screen_name");
     string sender_name = dm_obj.get_object_member ("sender").get_string_member ("name").strip ();
-    thread_entry.name = sender_name;
+    thread_entry.name = sender_name.replace ("&", "&amp;");
     thread_entry.screen_name = author;
     thread_entry.last_message = TextTransform.transform (text,
                                                          url_list,
@@ -276,7 +285,7 @@ class DMThreadsPage : IPage, IMessageReceiver, ScrollWidget {
               .run ();
     account.user_counter.user_seen (sender_id, author, sender_name);
 
-    thread_entry.avatar = Twitter.get ().get_avatar (avatar_url, (a) => {
+    thread_entry.avatar = Twitter.get ().get_avatar (sender_id, avatar_url, (a) => {
       thread_entry.avatar = a;
     });
   } // }}}

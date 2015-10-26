@@ -15,13 +15,12 @@
  *  along with corebird.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
 [GtkTemplate (ui = "/org/baedert/corebird/ui/dm-page.ui")]
 class DMPage : IPage, IMessageReceiver, Gtk.Box {
   public int unread_count                   { get { return 0; } }
   public unowned MainWindow main_window     { get; set; }
   public unowned Account account            { get; set; }
-  public unowned DeltaUpdater delta_updater { get; set; }
+  public unowned DeltaUpdater delta_updater;
   public int id                             { get; set; }
   [GtkChild]
   private Gtk.Button send_button;
@@ -37,9 +36,10 @@ class DMPage : IPage, IMessageReceiver, Gtk.Box {
   private int64 lowest_id = int64.MAX;
   private bool was_scrolled_down = false;
 
-  public DMPage (int id, Account account) {
+  public DMPage (int id, Account account, DeltaUpdater delta_updater) {
     this.id = id;
     this.account = account;
+    this.delta_updater = delta_updater;
     text_view.buffer.changed.connect (recalc_length);
     messages_list.set_sort_func (ITwitterItem.sort_func_inv);
     placeholder_box.show ();
@@ -58,7 +58,7 @@ class DMPage : IPage, IMessageReceiver, Gtk.Box {
     });
   }
 
-  public void stream_message_received (StreamMessageType type, Json.Node root) { // {{{
+  public void stream_message_received (StreamMessageType type, Json.Node root) {
     if (type == StreamMessageType.DIRECT_MESSAGE) {
       // Arriving new dms get already cached in the DMThreadsPage
       var obj = root.get_object ().get_object_member ("direct_message");
@@ -145,9 +145,9 @@ class DMPage : IPage, IMessageReceiver, Gtk.Box {
       if (scroll_widget.scrolled_down)
         scroll_widget.scroll_down_next ();
     }
-  } /// }}}
+  }
 
-  private void load_older () { // {{{
+  private void load_older () {
     var now = new GLib.DateTime.now_local ();
     scroll_widget.balance_next_upper_change (TOP);
     // Load messages
@@ -178,9 +178,9 @@ class DMPage : IPage, IMessageReceiver, Gtk.Box {
       return true;
     });
 
-  } // }}}
+  }
 
-  public void on_join (int page_id, Bundle? args) { // {{{
+  public void on_join (int page_id, Bundle? args) {
     int64 user_id = args.get_int64 ("sender_id");
     if (user_id == 0)
       return;
@@ -191,6 +191,7 @@ class DMPage : IPage, IMessageReceiver, Gtk.Box {
     string name = null;
     if ((screen_name = args.get_string ("screen_name")) != null) {
       name = args.get_string ("name");
+      placeholder_box.user_id = user_id;
       placeholder_box.screen_name = screen_name;
       placeholder_box.name = name;
       placeholder_box.avatar_url = args.get_string ("avatar_url");
@@ -242,14 +243,13 @@ class DMPage : IPage, IMessageReceiver, Gtk.Box {
 
     // Focus the text entry
     text_view.grab_focus ();
-  } // }}}
+  }
 
   public void on_leave () {}
 
   [GtkCallback]
-  private void send_button_clicked_cb () { // {{{
-    if (text_view.buffer.text.length == 0 ||
-        text_view.buffer.text.length > Tweet.MAX_LENGTH)
+  private void send_button_clicked_cb () {
+    if (text_view.buffer.text.length == 0)
       return;
 
     // Withdraw the notification if there is one
@@ -292,7 +292,7 @@ class DMPage : IPage, IMessageReceiver, Gtk.Box {
     // Scroll down
     if (scroll_widget.scrolled_down)
       scroll_widget.scroll_down_next ();
-  } // }}}
+  }
 
   [GtkCallback]
   private bool text_view_key_press_cb (Gdk.EventKey evt) {
@@ -307,7 +307,7 @@ class DMPage : IPage, IMessageReceiver, Gtk.Box {
 
   private void recalc_length () {
     uint text_length = text_view.buffer.text.length;
-    send_button.sensitive = text_length > 0 && text_length < 140;
+    send_button.sensitive = text_length > 0;
   }
 
 

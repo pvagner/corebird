@@ -23,7 +23,6 @@ class ListStatusesPage : ScrollWidget, IPage {
   public unowned Account account            { get; set; }
   public unowned DeltaUpdater delta_updater {
     set {
-      this.tweet_list.delta_updater = value;
     }
   }
   private int64 list_id;
@@ -75,10 +74,11 @@ class ListStatusesPage : ScrollWidget, IPage {
   private bool loading = false;
 
 
-  public ListStatusesPage (int id, Account account) {
+  public ListStatusesPage (int id, Account account, DeltaUpdater delta_updater) {
     this.id = id;
     this.account = account;
     this.tweet_list.account = account;
+    this.tweet_list.delta_updater = delta_updater;
     this.scroll_event.connect (scroll_event_cb);
     this.scrolled_to_end.connect (load_older);
     this.scrolled_to_start.connect (handle_scrolled_to_start);
@@ -162,11 +162,13 @@ class ListStatusesPage : ScrollWidget, IPage {
     call.add_param ("list_id", list_id.to_string ());
     call.add_param ("count", requested_tweet_count.to_string ());
 
-    Json.Node? root = yield TweetUtils.load_threaded (call);
-    if (root == null) {
+    Json.Node? root = null;
+    try {
+      root = yield TweetUtils.load_threaded (call, null);
+    } catch (GLib.Error e) {
+      warning (e.message);
       return;
     }
-
 
     var root_array = root.get_array ();
     if (root_array.get_length () == 0) {
@@ -192,9 +194,13 @@ class ListStatusesPage : ScrollWidget, IPage {
     call.add_param ("max_id", (tweet_list.model.lowest_id -1).to_string ());
     call.add_param ("count", requested_tweet_count.to_string ());
 
-    Json.Node? root = yield TweetUtils.load_threaded (call);
-    if (root == null)
+    Json.Node? root = null;
+    try {
+      root = yield TweetUtils.load_threaded (call, null);
+    } catch (GLib.Error e) {
+      warning (e.message);
       return;
+    }
 
     var root_array = root.get_array ();
     yield TweetUtils.work_array (root_array,

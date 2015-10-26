@@ -21,7 +21,9 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
   public static const int BY_ID       = 2;
 
   private const GLib.ActionEntry[] action_entries = {
-    {"quote",  quote_activated},
+    {"quote",    quote_activated   },
+    {"reply",    reply_activated   },
+    {"favorite", favorite_activated}
   };
 
   public int unread_count { get {return 0;} }
@@ -30,8 +32,6 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
   public unowned Account account { get; set; }
   public unowned DeltaUpdater delta_updater {
     set {
-      top_list_box.delta_updater = value;
-      bottom_list_box.delta_updater = value;
     }
   }
   private int64 tweet_id;
@@ -40,6 +40,8 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
   private Tweet tweet;
   private GLib.SimpleActionGroup actions;
 
+  [GtkChild]
+  private Gtk.Grid grid;
   [GtkChild]
   private MultiMediaWidget mm_widget;
   [GtkChild]
@@ -70,12 +72,19 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
   private MaxSizeContainer max_size_container;
   [GtkChild]
   private ReplyIndicator reply_indicator;
+  [GtkChild]
+  private Gtk.Stack main_stack;
+  [GtkChild]
+  private Gtk.Label error_label;
 
-  public TweetInfoPage (int id, Account account) {
+  public TweetInfoPage (int id, Account account, DeltaUpdater delta_updater) {
     this.id = id;
     this.account = account;
     this.top_list_box.account = account;
     this.bottom_list_box.account = account;
+    this.top_list_box.delta_updater = delta_updater;
+    this.bottom_list_box.delta_updater = delta_updater;
+
 
     mm_widget.media_clicked.connect ((m, i) => TweetUtils.handle_media_click (tweet, main_window, i));
     this.scroll_event.connect ((evt) => {
@@ -118,6 +127,7 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
 
     reply_indicator.replies_available = false;
     max_size_container.max_size = 0;
+    main_stack.visible_child = grid;
 
 
     if (existing) {
@@ -199,7 +209,7 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
 
     this.update_rt_fav_labels ();
 
-    TweetUtils.toggle_favorite_tweet.begin (account, tweet, !favorite_button.active, () => {
+    TweetUtils.set_favorite_status.begin (account, tweet, favorite_button.active, () => {
       favorite_button.sensitive = true;
     });
   }
@@ -216,7 +226,7 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
       this.tweet.retweet_count --;
     this.update_rt_fav_labels ();
 
-    TweetUtils.toggle_retweet_tweet.begin (account, tweet, !retweet_button.active, () => {
+    TweetUtils.set_retweet_status.begin (account, tweet, retweet_button.active, () => {
       retweet_button.sensitive = true;
     });
   }
@@ -263,11 +273,16 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
     call.set_function ("1.1/statuses/show.json");
     call.add_param ("id", tweet_id.to_string ());
     call.add_param ("include_my_retweet", "true");
-    TweetUtils.load_threaded.begin (call, (_, res) => {
-      Json.Node? root = TweetUtils.load_threaded.end (res);
+    TweetUtils.load_threaded.begin (call, null, (__, res) => {
+      Json.Node? root = null;
 
-      if (root == null)
+      try {
+        root = TweetUtils.load_threaded.end (res);
+      } catch (GLib.Error e) {
+        error_label.label = "%s: %s".printf (_("Could not show tweet"), e.message);
+        main_stack.visible_child = error_label;
         return;
+      }
 
       this.tweet = new Tweet ();
       tweet.load_from_json (root, now, account);
@@ -289,11 +304,15 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
     reply_call.add_param ("q", "to:" + this.screen_name);
     reply_call.add_param ("since_id", tweet_id.to_string ());
     reply_call.add_param ("count", "200");
-    TweetUtils.load_threaded.begin (reply_call, (_, res) => {
-      Json.Node? root = TweetUtils.load_threaded.end (res);
+    TweetUtils.load_threaded.begin (reply_call, null, (_, res) => {
+      Json.Node? root = null;
 
-      if (root == null)
+      try {
+        root = TweetUtils.load_threaded.end (res);
+      } catch (GLib.Error e) {
+        warning (e.message);
         return;
+      }
 
       var statuses_node = root.get_object ().get_array_member ("statuses");
       int64 previous_tweet_id = -1;
@@ -396,9 +415,8 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
     text_label.label = tweet.get_formatted_text ();
     name_button.set_markup (tweet.user_name);
     screen_name_label.label = "@" + tweet.screen_name;
-    avatar_image.surface = tweet.avatar;
-    tweet.notify["avatar"].connect (() => {
-      avatar_image.surface = tweet.avatar;
+    avatar_image.surface = Twitter.get ().get_avatar (tweet.user_id, tweet.avatar_url, (a) => {
+      avatar_image.surface = a;
     });
     update_rt_fav_labels ();
     time_label.label = time_format;
@@ -444,6 +462,35 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
     ComposeTweetWindow ctw = new ComposeTweetWindow(main_window, this.account, this.tweet,
                                                     ComposeTweetWindow.Mode.QUOTE);
     ctw.show ();
+  }
+
+  private void reply_activated () {
+    ComposeTweetWindow ctw = new ComposeTweetWindow(main_window, this.account, this.tweet,
+                                                    ComposeTweetWindow.Mode.REPLY);
+    ctw.show ();
+  }
+
+  private void favorite_activated () {
+    if (!values_set)
+      return;
+
+    bool favoriting = !favorite_button.active;
+
+    favorite_button.sensitive = false;
+
+    if (favoriting)
+      this.tweet.favorite_count ++;
+    else
+      this.tweet.favorite_count --;
+
+    this.update_rt_fav_labels ();
+
+    TweetUtils.set_favorite_status.begin (account, tweet, !favoriting, () => {
+      favorite_button.sensitive = true;
+      values_set = false;
+      favorite_button.active = favoriting;
+      values_set = true;
+    });
   }
 
   public string? get_title () {

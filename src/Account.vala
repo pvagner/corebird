@@ -58,7 +58,8 @@ public class Account : GLib.Object {
       return;
 
     this.db = new Sql.Database (Dirs.config (@"accounts/$id.db"),
-                                Sql.ACCOUNTS_INIT_FILE);
+                                Sql.ACCOUNTS_INIT_FILE,
+                                Sql.ACCOUNTS_SQL_VERSION);
     user_counter = new UserCounter ();
     user_counter.load (db);
     this.load_filters ();
@@ -156,9 +157,13 @@ public class Account : GLib.Object {
     }
     call.add_param ("skip_status", "true");
 
-    Json.Node? root_node = yield TweetUtils.load_threaded (call);
-    if (root_node == null)
+    Json.Node? root_node = null;
+    try {
+      root_node = yield TweetUtils.load_threaded (call, null);
+    } catch (GLib.Error e) {
+      warning (e.message);
       return;
+    }
 
     bool values_changed = false;
 
@@ -260,8 +265,11 @@ public class Account : GLib.Object {
     call.set_function (function);
     call.set_method ("GET");
 
-    Json.Node? root = yield TweetUtils.load_threaded (call);
-    if (root == null) {
+    Json.Node? root = null;
+    try {
+      root = yield TweetUtils.load_threaded (call, null);
+    } catch (GLib.Error e) {
+      warning (e.message);
       collect_obj.emit ();
       return null;
     }

@@ -36,24 +36,34 @@ class AvatarWidget : Gtk.Widget {
   }
   public bool verified { get; set; default = false; }
 
-  private Cairo.Surface _surface;
+  private Cairo.ImageSurface _surface;
   public Cairo.Surface surface {
     get {
       return _surface;
     }
     set {
-      if (this._surface != null)
-        Twitter.unref_avatar (this._surface);
+      if (this._surface == value) return;
 
-      this._surface = value;
+      bool animate = false;
 
       if (this._surface != null)
-        Twitter.ref_avatar (this._surface);
+        Twitter.get ().unref_avatar (this._surface);
+      else
+        animate = true;
+
+      this._surface = (Cairo.ImageSurface)value;
+
+      if (this._surface != null) {
+        Twitter.get ().ref_avatar (this._surface);
+        if (animate)
+          this.start_animation ();
+      }
 
       this.queue_draw ();
     }
   }
-
+  private double alpha = 1.0f;
+  private int64 start_time;
 
 
   static Cairo.Surface[] verified_icons;
@@ -87,8 +97,33 @@ class AvatarWidget : Gtk.Widget {
 
   ~AvatarWidget () {
     if (this._surface != null)
-      Twitter.unref_avatar (this._surface);
+      Twitter.get ().unref_avatar (this._surface);
   }
+
+
+  private void start_animation () {
+    if (!this.get_realized ())
+      return;
+
+    alpha = 0.0;
+    this.start_time = this.get_frame_clock ().get_frame_time ();
+    this.add_tick_callback (fade_in_cb);
+  }
+
+  private bool fade_in_cb (Gtk.Widget widget, Gdk.FrameClock frame_clock) {
+    int64 now = frame_clock.get_frame_time ();
+    double t = (now - start_time) / (double) TRANSITION_DURATION;
+
+    if (t >= 1.0) {
+      t = 1.0;
+    }
+
+    this.alpha = ease_out_cubic (t);
+    this.queue_draw ();
+
+    return t < 1.0;
+  }
+
 
 
   public override bool draw (Cairo.Context ctx) {
@@ -99,6 +134,9 @@ class AvatarWidget : Gtk.Widget {
       return false;
     }
 
+    double surface_scale;
+    this._surface.get_device_scale (out surface_scale, out surface_scale);
+
     if (width != height) {
       warning ("Avatar with mapped with width %d and height %d", width, height);
     }
@@ -108,27 +146,33 @@ class AvatarWidget : Gtk.Widget {
                                              width, height);
     var ct = new Cairo.Context (surface);
 
+    double scale = (double)this.get_allocated_width () /
+                   (double) (this._surface.get_width () / surface_scale);
+
+
+
     ct.rectangle (0, 0, width, height);
+    ct.scale (scale, scale);
     ct.set_source_surface (this._surface, 0, 0);
     ct.fill();
 
-      var sc = this.get_style_context ();
     if (_round) {
       // make it round
+      ct.scale (1.0/scale, 1.0/scale);
       ct.set_operator (Cairo.Operator.DEST_IN);
       ct.arc ((width / 2.0), (height / 2.0),
-              (width / 2.0) - 0.5, /* Radius */
-              0, /* Angle from */
-              2 * Math.PI); /* Angle to */
+              (width / 2.0) - 0.5, // Radius
+              0,                   //Angle from
+              2 * Math.PI);        // Angle to
       ct.fill ();
 
       // draw outline
-      sc.render_frame (ctx, 0, 0, width, height);
+      this.get_style_context ().render_frame (ctx, 0, 0, width, height);
     }
 
     ctx.rectangle (0, 0, width, height);
     ctx.set_source_surface (surface, 0, 0);
-    ctx.fill ();
+    ctx.paint_with_alpha (alpha);
 
 
     /* Draw verification indicator */
@@ -143,24 +187,12 @@ class AvatarWidget : Gtk.Widget {
       ctx.set_source_surface (verified_img,
                               width - VERIFIED_SIZES[index],
                               0);
-      ctx.fill ();
+      ctx.paint_with_alpha (this.alpha);
     }
 
-    return GLib.Source.CONTINUE;
+    return Gdk.EVENT_PROPAGATE;
   }
 
-
-  public override void get_preferred_height (out int minimal,
-                                             out int natural) {
-
-    if (this._surface == null) {
-      minimal = 0;
-      natural = 0;
-    } else {
-      minimal = ((Cairo.ImageSurface)this._surface).get_height ();
-      natural = ((Cairo.ImageSurface)this._surface).get_height ();
-    }
-  }
 }
 
 

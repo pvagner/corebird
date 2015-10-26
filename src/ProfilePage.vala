@@ -24,8 +24,7 @@ class ProfilePage : ScrollWidget, IPage, IMessageReceiver {
   };
 
   public int unread_count {
-    get{return 0;}
-    set{}
+    get { return 0; }
   }
   private unowned MainWindow _main_window;
   public unowned MainWindow main_window {
@@ -39,11 +38,7 @@ class ProfilePage : ScrollWidget, IPage, IMessageReceiver {
   }
   public unowned Account account { get; set; }
   public int id { get; set; }
-  public unowned DeltaUpdater delta_updater {
-    set {
-      tweet_list.delta_updater = value;
-    }
-  }
+  private DeltaUpdater delta_updater;
 
   [GtkChild]
   private AspectImage banner_image;
@@ -66,7 +61,7 @@ class ProfilePage : ScrollWidget, IPage, IMessageReceiver {
   [GtkChild]
   private Gtk.Label location_label;
   [GtkChild]
-  private Gtk.Button follow_button;
+  private FollowButton follow_button;
   [GtkChild]
   private TweetListBox tweet_list;
   [GtkChild]
@@ -88,7 +83,6 @@ class ProfilePage : ScrollWidget, IPage, IMessageReceiver {
   [GtkChild]
   private Gtk.RadioButton tweets_button;
   private GLib.MenuModel more_menu;
-  private bool following;
   private int64 user_id;
   private new string name;
   private string screen_name;
@@ -105,11 +99,13 @@ class ProfilePage : ScrollWidget, IPage, IMessageReceiver {
   private Cursor? following_cursor = null;
   private GLib.SimpleActionGroup actions;
 
-  public ProfilePage (int id, Account account) {
+  public ProfilePage (int id, Account account, DeltaUpdater delta_updater) {
     this.id = id;
     this.account = account;
     this.user_lists.account = account;
     this.tweet_list.account = account;
+    this.delta_updater = delta_updater;
+    this.tweet_list.delta_updater = delta_updater;
 
     this.scroll_event.connect ((evt) => {
       if (evt.delta_y < 0 && this.vadjustment.value == 0) {
@@ -167,7 +163,7 @@ class ProfilePage : ScrollWidget, IPage, IMessageReceiver {
     this.more_menu = more_button.menu_model;
   }
 
-  private void set_user_id (int64 user_id) { // {{{
+  private void set_user_id (int64 user_id) {
     this.user_id = user_id;
 
     follow_button.sensitive = (user_id != account.id);
@@ -187,14 +183,15 @@ class ProfilePage : ScrollWidget, IPage, IMessageReceiver {
     .run ((vals) => {
       /* If we get inside this block, there is already some data in the
         DB we can use. */
-      avatar_image.surface = load_surface (Dirs.cache ("/assets/avatars/" + vals[7]));
+      avatar_image.surface = Twitter.get ().get_cached_avatar (user_id);
 
       var entities = new TextEntity[0];
 
       set_data(vals[2], vals[1], vals[9], vals[10], vals[3],
                int.parse (vals[4]), int.parse (vals[5]), int.parse (vals[6]),
                vals[7], false, ref entities);
-      set_follow_button_state (bool.parse (vals[11]));
+      this.follow_button.following = bool.parse (vals[11]);
+      this.follow_button.sensitive = (this.user_id != this.account.id);
       string banner_name = Utils.get_banner_name (user_id);
 
       if (FileUtils.test(Dirs.cache("assets/banners/"+banner_name), FileTest.EXISTS)){
@@ -212,7 +209,7 @@ class ProfilePage : ScrollWidget, IPage, IMessageReceiver {
 
     /* Load the profile data now, then - if available - set the cached data */
     load_profile_data.begin (user_id, !data_in_db);
-  } // }}}
+  }
 
 
   private async void load_friendship () {
@@ -236,30 +233,45 @@ class ProfilePage : ScrollWidget, IPage, IMessageReceiver {
     call.add_param ("user_id", user_id.to_string ());
     call.add_param ("include_entities", "false");
 
-    Json.Node? root_node = yield TweetUtils.load_threaded (call); // TODO: Use data_cancellable here
-    if (root_node == null) {
+    Json.Node? root_node = null;
+    try {
+      root_node = yield TweetUtils.load_threaded (call, data_cancellable);
+    } catch (GLib.Error e) {
+      warning (e.message);
       return;
     }
+
+    if (root_node == null) return;
 
     var root = root_node.get_object();
     int64 id = root.get_int_member ("id");
 
     string avatar_url = root.get_string_member("profile_image_url");
-    avatar_url = avatar_url.replace("_normal", "_bigger");
     string avatar_name = Utils.get_avatar_name(avatar_url);
+    int scale = this.get_scale_factor ();
 
+    if (scale == 1)
+      avatar_url = avatar_url.replace("_normal", "_bigger");
+    else
+      avatar_url = avatar_url.replace ("_normal", "_200x200");
 
-    avatar_image.surface = Twitter.get ().get_avatar (avatar_url, (a) => {
-      avatar_image.surface = a;
-        if (show_spinner) {
-          progress_spinner.stop ();
-          loading_stack.visible_child_name = "data";
-        }
-    }, 73);
-    if (avatar_image.surface != null && show_spinner) {
-      progress_spinner.stop ();
-      loading_stack.visible_child_name = "data";
-    }
+    // We don't use our AvatarCache here becase this (73×73) avatar is only
+    // ever loaded here.
+    TweetUtils.download_avatar.begin (avatar_url, 73 * scale, (obj, res) => {
+      Cairo.Surface surface;
+      try {
+        var pixbuf = TweetUtils.download_avatar.end (res);
+        surface = Gdk.cairo_surface_create_from_pixbuf (pixbuf, scale, null);
+      } catch (GLib.Error e) {
+        warning (e.message);
+        surface = Twitter.no_avatar;
+      }
+      avatar_image.surface = surface;
+      if (show_spinner) {
+        progress_spinner.stop ();
+        loading_stack.visible_child_name = "data";
+      }
+    });
 
     string name        = root.get_string_member("name").replace ("&", "&amp;").strip ();
     string screen_name = root.get_string_member("screen_name");
@@ -325,7 +337,8 @@ class ProfilePage : ScrollWidget, IPage, IMessageReceiver {
 
     set_data(name, screen_name, display_url, location, description, tweets,
          following, followers, avatar_url, verified, ref text_urls);
-    set_follow_button_state (is_following);
+    this.follow_button.following = is_following;
+    this.follow_button.sensitive = (this.user_id != this.account.id);
     Corebird.db.replace ("profiles")
                .vali64 ("id", id)
                .val ("screen_name", screen_name)
@@ -356,12 +369,16 @@ class ProfilePage : ScrollWidget, IPage, IMessageReceiver {
     call.add_param ("include_my_retweet", "true");
 
 
-    Json.Node? root = yield TweetUtils.load_threaded (call);
-
-    if (root == null) {
+    Json.Node? root = null;
+    try {
+      root = yield TweetUtils.load_threaded (call, data_cancellable);
+    } catch (GLib.Error e) {
+      warning (e.message);
       tweet_list.set_empty ();
       return;
     }
+
+    if (root == null) return;
 
     var root_array = root.get_array ();
     if (root_array.get_length () == 0) {
@@ -393,10 +410,15 @@ class ProfilePage : ScrollWidget, IPage, IMessageReceiver {
     call.add_param ("include_my_retweet", "true");
     call.add_param ("max_id", (tweet_list.model.lowest_id - 1).to_string ());
 
-    Json.Node? root = yield TweetUtils.load_threaded (call);
-
-    if (root == null)
+    Json.Node? root = null;
+    try {
+      root = yield TweetUtils.load_threaded (call, data_cancellable);
+    } catch (GLib.Error e) {
+      warning (e.message);
       return;
+    }
+
+    if (root == null) return;
 
     var root_arr = root.get_array ();
     yield TweetUtils.work_array (root_arr,
@@ -423,13 +445,18 @@ class ProfilePage : ScrollWidget, IPage, IMessageReceiver {
 
     users_array.foreach_element ((array, index, node) => {
       var user_obj = node.get_object ();
+      string avatar_url = user_obj.get_string_member ("profile_image_url");
+
+      if (this.get_scale_factor () == 2)
+        avatar_url = avatar_url.replace ("_normal", "_bigger");
+
 
       var entry = new UserListEntry ();
       entry.show_settings = false;
       entry.user_id = user_obj.get_int_member ("id");
-      entry.screen_name = user_obj.get_string_member ("screen_name");
+      entry.screen_name = "@" + user_obj.get_string_member ("screen_name");
       entry.name = user_obj.get_string_member ("name");
-      entry.avatar = user_obj.get_string_member ("profile_image_url");
+      entry.avatar_url = avatar_url;
       entry.get_style_context ().add_class ("tweet");
       entry.show ();
       this.followers_list.add (entry);
@@ -455,13 +482,17 @@ class ProfilePage : ScrollWidget, IPage, IMessageReceiver {
 
     users_array.foreach_element ((array, index, node) => {
       var user_obj = node.get_object ();
+      string avatar_url = user_obj.get_string_member ("profile_image_url");
+
+      if (this.get_scale_factor () == 2)
+        avatar_url = avatar_url.replace ("_normal", "_bigger");
 
       var entry = new UserListEntry ();
       entry.show_settings = false;
       entry.user_id = user_obj.get_int_member ("id");
-      entry.screen_name = user_obj.get_string_member ("screen_name");
+      entry.screen_name = "@" + user_obj.get_string_member ("screen_name");
       entry.name = user_obj.get_string_member ("name");
-      entry.avatar = user_obj.get_string_member ("profile_image_url");
+      entry.avatar_url = avatar_url;
       entry.get_style_context ().add_class ("tweet");
       entry.show ();
       this.following_list.add (entry);
@@ -554,10 +585,10 @@ class ProfilePage : ScrollWidget, IPage, IMessageReceiver {
   private void follow_button_clicked_cb () { //{{{
     var call = account.proxy.new_call();
     HomeTimeline ht = (HomeTimeline) main_window.get_page (Page.STREAM);
-    if (following) {
+    if (follow_button.following) {
       call.set_function( "1.1/friendships/destroy.json");
       ht.hide_tweets_from (this.user_id, Tweet.HIDDEN_UNFOLLOWED);
-      ht.hide_retweets_from (this.user_id, Tweet.HIDDEN_UNFOLLOWED); // XXX
+      ht.hide_retweets_from (this.user_id, Tweet.HIDDEN_UNFOLLOWED);
       follower_count --;
       account.unfollow_id (this.user_id);
       ((SimpleAction)actions.lookup_action ("toggle-retweets")).set_enabled (false);
@@ -582,7 +613,8 @@ class ProfilePage : ScrollWidget, IPage, IMessageReceiver {
     call.add_param ("id", user_id.to_string ());
     call.invoke_async.begin (null, (obj, res) => {
       try {
-        set_follow_button_state (!following);
+        this.follow_button.following = !this.follow_button.following;
+        this.follow_button.sensitive = (this.user_id != this.account.id);
         call.invoke_async.end (res);
       } catch (GLib.Error e) {
         critical (e.message);
@@ -598,23 +630,6 @@ class ProfilePage : ScrollWidget, IPage, IMessageReceiver {
   private bool activate_link (string uri) {
     return TweetUtils.activate_link (uri, main_window);
   }
-
-  private void set_follow_button_state (bool following) { //{{{
-    var sc = follow_button.get_style_context ();
-    follow_button.sensitive = (user_id != account.id);
-    if (following) {
-      sc.remove_class ("suggested-action");
-      sc.add_class ("destructive-action");
-      follow_button.label = _("Unfollow");
-    } else {
-      sc.remove_class ("destructive-action");
-      sc.add_class ("suggested-action");
-      follow_button.label = _("Follow");
-    }
-    this.following = following;
-    //dm_menu_item.sensitive = following;
-  } //}}}
-
 
   private void load_banner (string? path) {
     try {
@@ -651,6 +666,10 @@ class ProfilePage : ScrollWidget, IPage, IMessageReceiver {
       following_cursor = null;
       following_list.remove_all ();
       set_user_id (user_id);
+      if (account.follows_id (user_id)) {
+        this.follow_button.following = true;
+        this.follow_button.sensitive = true;
+      }
       tweet_list.model.clear ();
       user_lists.clear_lists ();
       lists_page_inited = false;
@@ -697,7 +716,7 @@ class ProfilePage : ScrollWidget, IPage, IMessageReceiver {
     bundle.put_int64 ("sender_id", user_id);
     bundle.put_string ("screen_name", screen_name);
     bundle.put_string ("name", name);
-    bundle.put_string ("avatar_url", avatar_url);
+    bundle.put_string ("avatar_url", avatar_url.replace ("_bigger", "_normal"));
     main_window.main_widget.switch_page (Page.DM, bundle);
   }
 
@@ -729,7 +748,8 @@ class ProfilePage : ScrollWidget, IPage, IMessageReceiver {
       ht.show_tweets_from (this.user_id, Tweet.HIDDEN_AUTHOR_BLOCKED);
     } else {
       call.set_function ("1.1/blocks/create.json");
-      set_follow_button_state (false);
+      this.follow_button.following = false;
+      this.follow_button.sensitive = (this.user_id != this.account.id);
       ht.hide_tweets_from (this.user_id, Tweet.HIDDEN_AUTHOR_BLOCKED);
     }
     set_user_blocked (!current_state);

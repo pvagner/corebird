@@ -81,7 +81,7 @@ void parse_entities (MiniTweet mt, Json.Object status)
     var url = node.get_object();
     string expanded_url = url.get_string_member("expanded_url");
 
-    if (InlineMediaDownloader.is_media_candidate (expanded_url)) {
+    if (is_media_candidate (expanded_url)) {
       var m = new Media ();
       m.url = expanded_url;
       m.id = real_media_count;
@@ -147,10 +147,10 @@ void parse_entities (MiniTweet mt, Json.Object status)
       };
       url_index ++;
       string media_url = url.get_string_member ("media_url");
-      if (InlineMediaDownloader.is_media_candidate (media_url)) {
+      if (is_media_candidate (media_url)) {
         var m = new Media ();
         m.url = media_url;
-        m.target_url = media_url + ":large";
+        m.target_url = media_url + ":orig";
         mt.medias[real_media_count] = m;
         real_media_count ++;
       }
@@ -169,10 +169,10 @@ void parse_entities (MiniTweet mt, Json.Object status)
           if (m != null && m.url == url)
             return;
         }
-        if (InlineMediaDownloader.is_media_candidate (url)) {
+        if (is_media_candidate (url)) {
           var m = new Media ();
           m.url = url;
-          m.target_url = url + ":large";
+          m.target_url = url + ":orig";
           m.id = media_obj.get_int_member ("id");
           m.type = Media.type_from_string (media_obj.get_string_member ("type"));
           mt.medias[real_media_count] = m;
@@ -205,7 +205,7 @@ void parse_entities (MiniTweet mt, Json.Object status)
   }
 
   mt.medias.resize (real_media_count);
-  InlineMediaDownloader.load_all_media (mt, mt.medias);
+  InlineMediaDownloader.get ().load_all_media (mt, mt.medias);
 
   /* Remove unnecessary url entries */
   mt.entities.resize (url_index);
@@ -279,12 +279,12 @@ public class Tweet : GLib.Object {
   public MiniTweet? retweeted_tweet = null;
   public MiniTweet? quoted_tweet = null;
 
-  public Cairo.Surface avatar { get; set; }
   /** The avatar url on the server */
   public string avatar_url;
   public bool verified = false;
   public int64 my_retweet;
   public bool protected;
+  public bool nsfw;
   public string? notification_id = null;
   private bool _seen = true;
   public bool seen {
@@ -305,22 +305,25 @@ public class Tweet : GLib.Object {
 
   public Media[] medias {
     get {
-      if (this.retweeted_tweet != null)
+      if (this.quoted_tweet != null)
+          return this.quoted_tweet.medias;
+      else if (this.retweeted_tweet != null)
         return this.retweeted_tweet.medias;
-      else if (this.quoted_tweet != null)
-        return this.quoted_tweet.medias;
       else
         return this.source_tweet.medias;
     }
   }
   public bool has_inline_media {
     get {
+      /* If there's a quoted tweet, always prefer that. */
+      if (this.quoted_tweet != null) {
+        return this.quoted_tweet.medias != null &&
+               this.quoted_tweet.medias.length > 0;
+      }
+
       if (this.retweeted_tweet != null)
         return retweeted_tweet.medias != null &&
                retweeted_tweet.medias.length > 0;
-      else if (this.quoted_tweet != null)
-        return quoted_tweet.medias != null &&
-               quoted_tweet.medias.length > 0;
       else
         return source_tweet.medias != null &&
                source_tweet.medias.length > 0;
@@ -329,10 +332,6 @@ public class Tweet : GLib.Object {
 
   public int retweet_count;
   public int favorite_count;
-
-  public Tweet () {
-    this.avatar = Twitter.no_avatar;
-  }
 
   public string[] get_mentions () {
     TextEntity[] entities;
@@ -372,10 +371,15 @@ public class Tweet : GLib.Object {
     this.retweet_count = (int)status.get_int_member ("retweet_count");
     this.favorite_count = (int)status.get_int_member ("favorite_count");
 
+    if (Utils.usable_json_value (status, "possibly_sensitive"))
+      this.nsfw = status.get_boolean_member ("possibly_sensitive");
+    else
+      this.nsfw = false;
+
     this.source_tweet = parse_mini_tweet (status);
 
-    if (status.has_member("retweeted_status")) {
-      Json.Object rt      = status.get_object_member("retweeted_status");
+    if (status.has_member ("retweeted_status")) {
+      Json.Object rt      = status.get_object_member ("retweeted_status");
       this.retweeted_tweet = parse_mini_tweet (rt);
       parse_entities (this.retweeted_tweet, rt);
 
@@ -405,15 +409,11 @@ public class Tweet : GLib.Object {
       parse_entities (this.quoted_tweet, quoted_status);
     }
 
-
     if (status.has_member ("current_user_retweet")) {
       this.my_retweet = status.get_object_member ("current_user_retweet").get_int_member ("id");
       this.retweeted  = true;
     }
 
-    this.avatar = Twitter.get ().get_avatar (avatar_url, (a) => {
-      this.avatar = a;
-    });
 
 #if DEBUG
     var gen = new Json.Generator ();
