@@ -1,4 +1,4 @@
-AC_INIT([corebird],[1.1],[mail@baedert.org])
+AC_INIT([corebird],[1.2],[mail@baedert.org])
 
 AC_PREREQ([2.65])
 
@@ -21,7 +21,7 @@ AC_PROG_INSTALL
 LT_PREREQ([2.2.6])
 LT_INIT([disable-static])
 
-VALA_MIN_VERSION=0.26.0
+VALA_MIN_VERSION=0.28.0
 AM_PROG_VALAC([$VALA_MIN_VERSION],
   [],
   [AC_MSG_ERROR([valac >= $VALA_MIN_VERSION is required])])
@@ -124,9 +124,6 @@ assets/32x32/Makefile
 assets/24x24/Makefile
 assets/16x16/Makefile
 po/Makefile.in
-sql/Makefile
-sql/accounts/Makefile
-sql/init/Makefile
 tests/Makefile
 ])
 

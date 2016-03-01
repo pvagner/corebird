@@ -116,11 +116,11 @@ class DMPage : IPage, IMessageReceiver, Gtk.Box {
           string expanded_url = url.get_string_member("expanded_url");
 
           Json.Array indices = url.get_array_member ("indices");
-          expanded_url = expanded_url.replace("&", "&amp;");
           url_list[index] = TextEntity() {
             from = (int)indices.get_int_element (0),
             to   = (int)indices.get_int_element (1) ,
-            target = expanded_url,
+            target = expanded_url.replace ("&", "&amp;"),
+            tooltip_text = expanded_url,
             display_text = url.get_string_member ("display_url")
           };
         });
@@ -131,15 +131,14 @@ class DMPage : IPage, IMessageReceiver, Gtk.Box {
 
       var sender = obj.get_object_member ("sender");
       var new_msg = new DMListEntry ();
-      new_msg.text = obj.get_string_member ("text");
+      new_msg.text = text;
       new_msg.name = sender.get_string_member ("name");
       new_msg.screen_name = sender.get_string_member ("screen_name");
-      new_msg.avatar_url = sender.get_string_member ("profile_image_url");
       new_msg.timestamp = Utils.parse_date (obj.get_string_member ("created_at")).to_unix ();
       new_msg.main_window = main_window;
       new_msg.user_id = sender.get_int_member ("id");
-      new_msg.load_avatar ();
       new_msg.update_time_delta ();
+      new_msg.load_avatar (sender.get_string_member ("profile_image_url"));
       delta_updater.add (new_msg);
       messages_list.add (new_msg);
       if (scroll_widget.scrolled_down)
@@ -153,26 +152,31 @@ class DMPage : IPage, IMessageReceiver, Gtk.Box {
     // Load messages
     // TODO: Fix code duplication
     account.db.select ("dms").cols ("from_id", "to_id", "text", "from_name", "from_screen_name",
-                                    "avatar_url", "timestamp", "id")
+                                    "timestamp", "id")
               .where (@"(`from_id`='$user_id' OR `to_id`='$user_id') AND `id` < '$lowest_id'")
               .order ("timestamp DESC")
               .limit (35)
               .run ((vals) => {
-      int64 id = int64.parse (vals[7]);
+      int64 id = int64.parse (vals[6]);
       if (id < lowest_id)
         lowest_id = id;
 
       var entry = new DMListEntry ();
       entry.id = id;
       entry.user_id = int64.parse (vals[0]);
-      entry.timestamp = int64.parse (vals[6]);
+      entry.timestamp = int64.parse (vals[5]);
       entry.text = vals[2];
       entry.name = vals[3];
       entry.screen_name = vals[4];
-      entry.avatar_url = vals[5];
       entry.main_window = main_window;
-      entry.load_avatar ();
       entry.update_time_delta (now);
+      Twitter.get ().load_avatar_for_user_id.begin (account,
+                                                    entry.user_id,
+                                                    48 * this.get_scale_factor (),
+                                                    (obj, res) => {
+        Cairo.Surface? s = Twitter.get ().load_avatar_for_user_id.end (res);
+        entry.avatar = s;
+      });
       delta_updater.add (entry);
       messages_list.add (entry);
       return true;
@@ -210,28 +214,33 @@ class DMPage : IPage, IMessageReceiver, Gtk.Box {
     var now = new GLib.DateTime.now_local ();
     // Load messages
     account.db.select ("dms").cols ("from_id", "to_id", "text", "from_name", "from_screen_name",
-                                    "avatar_url", "timestamp", "id")
+                                    "timestamp", "id")
               .where (@"`from_id`='$user_id' OR `to_id`='$user_id'")
               .order ("timestamp DESC")
               .limit (35)
               .run ((vals) => {
-      int64 id = int64.parse (vals[7]);
+      int64 id = int64.parse (vals[6]);
       if (id < lowest_id)
         lowest_id = id;
 
       var entry = new DMListEntry ();
       entry.id = id;
       entry.user_id = int64.parse (vals[0]);
-      entry.timestamp = int64.parse (vals[6]);
+      entry.timestamp = int64.parse (vals[5]);
       entry.text = vals[2];
       entry.name = vals[3];
       name = vals[3];
       entry.screen_name = vals[4];
       screen_name = vals[4];
-      entry.avatar_url = vals[5];
       entry.main_window = main_window;
-      entry.load_avatar ();
       entry.update_time_delta (now);
+      Twitter.get ().load_avatar_for_user_id.begin (account,
+                                                    entry.user_id,
+                                                    48 * this.get_scale_factor (),
+                                                    (obj, res) => {
+        Cairo.Surface? s = Twitter.get ().load_avatar_for_user_id.end (res);
+        entry.avatar = s;
+      });
       delta_updater.add (entry);
       messages_list.add (entry);
       return true;
@@ -315,6 +324,6 @@ class DMPage : IPage, IMessageReceiver, Gtk.Box {
     return _("Direct Conversation");
   }
 
-  public void create_tool_button (Gtk.RadioButton? group) {}
-  public Gtk.RadioButton? get_tool_button() {return null;}
+  public void create_radio_button (Gtk.RadioButton? group) {}
+  public Gtk.RadioButton? get_radio_button() {return null;}
 }

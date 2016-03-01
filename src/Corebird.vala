@@ -23,14 +23,17 @@ public class Corebird : Gtk.Application {
   public signal void account_removed (Account acc);
   public signal void account_window_changed (int64? old_id, int64 new_id);
 
+  private SettingsDialog? settings_dialog = null;
+
   const GLib.ActionEntry[] app_entries = {
     {"show-settings",     show_settings_activated         },
+    {"show-shortcuts",    show_shortcuts_activated        },
     {"quit",              quit_application                },
     {"show-about-dialog", about_activated                 },
     {"show-dm-thread",    show_dm_thread,          "(xx)" },
     {"show-window",       show_window,             "x"    },
     {"post-json",         post_json,               "(ss)" },
-    {"print-debug",       print_debug,                    }
+    {"print-debug",       print_debug,                    },
   };
 
 
@@ -87,7 +90,17 @@ public class Corebird : Gtk.Application {
   private void show_settings_activated () {
     /* We don't set the settings dialog transient to
        any window because we already save its size */
+    if (this.settings_dialog != null)
+      return;
+
     var dialog = new SettingsDialog (this);
+    var action = (GLib.SimpleAction)this.lookup_action ("show-settings");
+    action.set_enabled (false);
+    dialog.delete_event.connect (() => {
+      action.set_enabled (true);
+      this.settings_dialog = null;
+      return Gdk.EVENT_PROPAGATE;
+    });
     dialog.show ();
   }
 
@@ -99,9 +112,22 @@ public class Corebird : Gtk.Application {
     ad.show_all ();
   }
 
+  private void show_shortcuts_activated () {
+    // TODO: Remove this once the required gtk version is >= 3.20
+    if (Gtk.get_major_version () == 3 && Gtk.get_minor_version () >= 19) {
+      var builder = new Gtk.Builder.from_resource ("/org/baedert/corebird/ui/shortcuts-window.ui");
+      var shortcuts_window = (Gtk.Window) builder.get_object ("shortcuts_window");
+      shortcuts_window.show ();
+    } else {
+      warning ("The shortcuts window is only available in gtk+ >= 3.20, version is %u.%u",
+               Gtk.get_major_version (), Gtk.get_minor_version ());
+    }
+  }
+
   public override void startup () {
     base.startup ();
 
+    new ComposeImageManager ();
     new LazyMenuButton ();
 
 #if DEBUG
@@ -164,7 +190,8 @@ public class Corebird : Gtk.Application {
     this.set_accels_for_action ("win.switch-page(5)", {"<Alt>6"});
     this.set_accels_for_action ("win.switch-page(6)", {"<Alt>7"});
     this.set_accels_for_action ("app.show-settings", {Settings.get_accel ("show-settings")});
-    this.set_accels_for_action ("app.quit", {"<Control>Q"});
+    this.set_accels_for_action ("app.quit", {"<Primary>Q"});
+    this.set_accels_for_action ("app.show-shortcuts", {"<Primary>question", "<Primary>F1"});
     this.set_accels_for_action ("win.show-account-dialog", {Settings.get_accel ("show-account-dialog")});
     this.set_accels_for_action ("win.show-account-list", {Settings.get_accel ("show-account-list")});
 
@@ -176,6 +203,11 @@ public class Corebird : Gtk.Application {
 #endif
 
     this.add_action_entries (app_entries, this);
+
+    // TODO: Remove this once the required gtk version is >= 3.20
+    if (Gtk.get_major_version () == 3 && Gtk.get_minor_version () < 19) {
+      ((GLib.SimpleAction)this.lookup_action ("show-shortcuts")).set_enabled (false);
+    }
 
     // If the user wants the dark theme, apply it
     var gtk_s = Gtk.Settings.get_default ();
@@ -200,9 +232,9 @@ public class Corebird : Gtk.Application {
       return mi;
   }
 
-  private void account_info_changed (Account    source,
-                                     string     screen_name,
-                                     string     s,
+  private void account_info_changed (Account       source,
+                                     string        screen_name,
+                                     string        s,
                                      Cairo.Surface a,
                                      Cairo.Surface b) {
     for (int i = 0; i < account_menu.get_n_items (); i++){
@@ -249,8 +281,9 @@ public class Corebird : Gtk.Application {
     if (startup_accounts.length == 1 && startup_accounts[0] == "")
       startup_accounts.resize (0);
 
-
+    debug ("Configured startup accounts: %d", startup_accounts.length);
     uint n_accounts = Account.list_accounts ().length ();
+    debug ("Configured accounts: %u", n_accounts);
 
     if (startup_accounts.length == 0) {
       if (n_accounts == 1) {
@@ -267,7 +300,7 @@ public class Corebird : Gtk.Application {
       }
     } else {
       bool opened_window = false;
-      foreach (string account in startup_accounts) {
+      foreach (unowned string account in startup_accounts) {
         if (!is_window_open_for_screen_name (account, null)) {
           if (add_window_for_screen_name (account)) {
             opened_window = true;
@@ -304,7 +337,7 @@ public class Corebird : Gtk.Application {
    * Note that this only works if the account is already properly
    * set up and won't warn or fail if if isn't.
    *
-   * @param screen_name The screen name of the account do add a
+   * @param screen_name The screen name of the account to add a
    *                    MainWindow for.
    *
    * @return true if a window has been opened, false otherwise
@@ -450,6 +483,4 @@ public class Corebird : Gtk.Application {
     } else
       error ("Window for %s is not open, so account isn't active.", screen_name);
   }
-
-
 }

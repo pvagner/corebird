@@ -40,6 +40,8 @@ class SettingsDialog : Gtk.Window {
   [GtkChild]
   private Gtk.Switch remove_media_links_switch;
   [GtkChild]
+  private Gtk.Switch hide_nsfw_content_switch;
+  [GtkChild]
   private Gtk.ListBox snippet_list_box;
 
   private TweetListEntry sample_tweet_entry;
@@ -69,6 +71,7 @@ class SettingsDialog : Gtk.Window {
     Settings.get ().bind ("double-click-activation", double_click_activation_switch,
                           "active", SettingsBindFlags.DEFAULT);
 
+    // Tweets page
 
     // Set up sample tweet {{{
     var sample_tweet = new Tweet ();
@@ -138,6 +141,10 @@ class SettingsDialog : Gtk.Window {
     remove_media_links_switch.active = (TransformFlags.REMOVE_MEDIA_LINKS in text_transform_flags);
 
 
+    Settings.get ().bind ("hide-nsfw-content", hide_nsfw_content_switch, "active",
+                          SettingsBindFlags.DEFAULT);
+
+
     // Fill snippet list box
     Corebird.snippet_manager.query_snippets ((key, value) => {
       var e = new SnippetListEntry (key, value);
@@ -152,7 +159,7 @@ class SettingsDialog : Gtk.Window {
   [GtkCallback]
   private bool window_destroy_cb () {
     save_geometry ();
-    return false;
+    return Gdk.EVENT_PROPAGATE;
   }
 
   [GtkCallback]
@@ -216,8 +223,8 @@ class SettingsDialog : Gtk.Window {
     if (w == 0 || h == 0)
       return;
 
-    move (x, y);
-    resize (w, h);
+    this.move (x, y);
+    this.set_default_size (w, h);
   }
 
   private void save_geometry () {
@@ -226,9 +233,8 @@ class SettingsDialog : Gtk.Window {
         y = 0,
         w = 0,
         h = 0;
-    get_position (out x, out y);
-    w = get_allocated_width ();
-    h = get_allocated_height ();
+    this.get_position (out x, out y);
+    this.get_size (out w, out h);
     builder.add_value (new GLib.Variant.int32(x));
     builder.add_value (new GLib.Variant.int32(y));
     builder.add_value (new GLib.Variant.int32(w));
@@ -240,7 +246,7 @@ class SettingsDialog : Gtk.Window {
     Gtk.AccelGroup ag = new Gtk.AccelGroup();
 
     ag.connect (Gdk.Key.Escape, 0, Gtk.AccelFlags.LOCKED,
-        () => {this.destroy (); return true;});
+        () => {this.close (); return true;});
     ag.connect (Gdk.Key.@1, Gdk.ModifierType.MOD1_MASK, Gtk.AccelFlags.LOCKED,
         () => {main_stack.visible_child_name = "interface"; return true;});
     ag.connect (Gdk.Key.@2, Gdk.ModifierType.MOD1_MASK, Gtk.AccelFlags.LOCKED,

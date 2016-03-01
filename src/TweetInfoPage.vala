@@ -30,10 +30,6 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
   public int id                         { get; set; }
   public unowned MainWindow main_window { get; set; }
   public unowned Account account { get; set; }
-  public unowned DeltaUpdater delta_updater {
-    set {
-    }
-  }
   private int64 tweet_id;
   private string screen_name;
   private bool values_set = false;
@@ -153,6 +149,7 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
       this.tweet = tweet;
       set_tweet_data (tweet);
     } else if (mode == BY_ID) {
+      this.tweet = null;
       this.tweet_id = args.get_int64 ("tweet_id");
       this.screen_name = args.get_string ("screen_name");
     }
@@ -284,12 +281,21 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
         return;
       }
 
-      this.tweet = new Tweet ();
-      tweet.load_from_json (root, now, account);
       Json.Object root_object = root.get_object ();
+
+      if (this.tweet != null) {
+        int n_retweets  = (int)root_object.get_int_member ("retweet_count");
+        int n_favorites = (int)root_object.get_int_member ("favorite_count");
+        this.tweet.retweet_count = n_retweets;
+        this.tweet.favorite_count = n_favorites;
+      } else {
+        this.tweet = new Tweet ();
+        tweet.load_from_json (root, now, account);
+      }
 
       string with = root_object.get_string_member ("source");
       with = "<span underline='none'>" + extract_source (with) + "</span>";
+
       set_tweet_data (tweet, with);
 
       if (!existing)
@@ -360,7 +366,7 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
    *
    * @param reply_id The id of the tweet the previous tweet was a reply to.
    */
-  private void load_replied_to_tweet (int64 reply_id) { //{{{
+  private void load_replied_to_tweet (int64 reply_id) {
     if (reply_id == 0) {
       return;
     }
@@ -375,7 +381,8 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
         call.invoke_async.end (res);
       }catch (GLib.Error e) {
         critical(e.message);
-        if (e.message.strip () != "Forbidden") {
+        if (e.message.strip () != "Forbidden" &&
+            e.message.strip ().down () != "not found") {
           Utils.show_error_object (call.get_payload (), e.message,
                                    GLib.Log.LINE, GLib.Log.FILE);
         }
@@ -397,12 +404,12 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
       bottom_list_box.model.add (tweet);
       load_replied_to_tweet (tweet.reply_id);
     });
-  } //}}}
+  }
 
   /**
    *
    */
-  private void set_tweet_data (Tweet tweet, string? with = null) {//{{{
+  private void set_tweet_data (Tweet tweet, string? with = null) {
     account.user_counter.user_seen (tweet.user_id, tweet.screen_name, tweet.user_name);
     GLib.DateTime created_at = new GLib.DateTime.from_unix_local (
              tweet.retweeted_tweet != null ? tweet.retweeted_tweet.created_at :
@@ -420,9 +427,9 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
     });
     update_rt_fav_labels ();
     time_label.label = time_format;
-    retweet_button.active = tweet.retweeted;
-    favorite_button.active = tweet.favorited;
-    avatar_image.verified = tweet.verified;
+    retweet_button.active = tweet.is_flag_set (TweetState.RETWEETED);
+    favorite_button.active = tweet.is_flag_set (TweetState.FAVORITED);
+    avatar_image.verified = tweet.is_flag_set (TweetState.VERIFIED);
 
 
     set_source_link (tweet.id, tweet.screen_name);
@@ -434,7 +441,7 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
       mm_widget.hide ();
     }
 
-    if (tweet.user_id == account.id || tweet.protected) {
+    if (tweet.user_id == account.id || tweet.is_flag_set (TweetState.PROTECTED)) {
       retweet_button.hide ();
 
       ((GLib.SimpleAction)actions.lookup_action ("quote")).set_enabled (false);
@@ -442,7 +449,7 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
       retweet_button.show ();
       ((GLib.SimpleAction)actions.lookup_action ("quote")).set_enabled (true);
     }
-  } //}}}
+  }
 
   private void update_rt_fav_labels () {
     rt_label.label = "<big><b>%'d</b></big> %s".printf (tweet.retweet_count, _("Retweets"));
@@ -508,7 +515,7 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
    *
    * @return The #source_string without the rel parameter
    */
-  private string extract_source (string source_str) { //{{{
+  private string extract_source (string source_str) {
     int from, to;
     int tmp = 0;
     tmp = source_str.index_of_char ('"');
@@ -518,10 +525,10 @@ class TweetInfoPage : IPage, ScrollWidget, IMessageReceiver {
     if (to == -1 || from == -1)
       return source_str;
     return source_str.substring (0, from-5) + source_str.substring(to + 1);
-  } //}}}
+  }
 
-  public void create_tool_button (Gtk.RadioButton? group) {}
-  public Gtk.RadioButton? get_tool_button () {
+  public void create_radio_button (Gtk.RadioButton? group) {}
+  public Gtk.RadioButton? get_radio_button () {
     return null;
   }
 

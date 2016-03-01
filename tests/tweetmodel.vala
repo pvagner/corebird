@@ -61,13 +61,13 @@ void tweet_removal () {
   {
     var t = new Tweet ();
     t.id = 2;
-    t.hidden_flags |= Tweet.HIDDEN_FORCE;
+    t.set_flag (TweetState.HIDDEN_FORCE);
 
     tm.add (t);
 
     t = new Tweet ();
     t.id = 1;
-    t.hidden_flags |= Tweet.HIDDEN_UNFOLLOWED;
+    t.set_flag (TweetState.HIDDEN_UNFOLLOWED);
 
     tm.add (t);
   }
@@ -87,16 +87,16 @@ void tweet_removal () {
 void clear () {
   var tm = new TweetModel ();
 
-  tm.add (new Tweet ());
-  tm.add (new Tweet ());
-  tm.add (new Tweet ());
-  tm.add (new Tweet ());
-  tm.add (new Tweet ());
-  tm.add (new Tweet ());
-  tm.add (new Tweet ());
-  tm.add (new Tweet ());
+  const int n = 10;
 
-  assert (tm.get_n_items () == 8);
+  for (int i = 0; i < n; i++) {
+    var t = new Tweet ();
+    t.id = 100 + i;
+
+    tm.add (t);
+  }
+
+  assert (tm.get_n_items () == n);
 
   tm.clear ();
   assert (tm.get_n_items () == 0);
@@ -131,11 +131,11 @@ void remove_own_retweet () {
   var t1 = new Tweet ();
   t1.id = 1337;
   t1.my_retweet = 500; // <--
-  t1.retweeted = true;
+  t1.set_flag (TweetState.RETWEETED);
 
   tm.add (t1);
 
-  for (int i = 0; i < 50; i ++) {
+  for (int i = 1; i < 51; i ++) {
     var t = new Tweet ();
     t.id = i;
     tm.add (t);
@@ -155,6 +155,7 @@ void hide_rt () {
   var tm = new TweetModel ();
 
   var t1 = new Tweet ();
+  t1.id = 100;
   t1.source_tweet = new MiniTweet ();
   t1.source_tweet.author = UserIdentity ();
   t1.source_tweet.author.id = 10;
@@ -166,12 +167,12 @@ void hide_rt () {
 
   tm.add (t1);
 
-  tm.toggle_flag_on_retweet (10, Tweet.HIDDEN_FILTERED, true);
+  tm.toggle_flag_on_retweet (10, TweetState.HIDDEN_FILTERED, true);
 
   assert (tm.get_n_items () == 1);
   assert (((Tweet)tm.get_item (0)).is_hidden);
 
-  tm.toggle_flag_on_retweet (10, Tweet.HIDDEN_FILTERED, false);
+  tm.toggle_flag_on_retweet (10, TweetState.HIDDEN_FILTERED, false);
   assert (!((Tweet)tm.get_item (0)).is_hidden);
 }
 

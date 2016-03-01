@@ -14,6 +14,7 @@
  *  You should have received a copy of the GNU General Public License
  *  along with corebird.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 [GtkTemplate (ui = "/org/baedert/corebird/ui/main-window.ui")]
 public class MainWindow : Gtk.ApplicationWindow {
   private const GLib.ActionEntry[] win_entries = {
@@ -54,7 +55,7 @@ public class MainWindow : Gtk.ApplicationWindow {
   public MainWindow (Gtk.Application app, Account? account = null){
     set_default_size (480, 700);
 
-    change_account (account, app);
+    change_account (account);
 
     account_list.set_sort_func (account_sort_func);
     account_list.set_header_func (default_header_func);
@@ -137,9 +138,7 @@ public class MainWindow : Gtk.ApplicationWindow {
 
 
 
-  public void change_account (Account? account,
-                              GLib.Application app = GLib.Application.get_default ()) {
-
+  public void change_account (Account? account) {
     int64? old_user_id = null;
     if (this.account != null) {
       old_user_id = this.account.id;
@@ -160,7 +159,7 @@ public class MainWindow : Gtk.ApplicationWindow {
       header_box.visible = true;
     }
 
-    Corebird cb = (Corebird) app;
+    Corebird cb = (Corebird) GLib.Application.get_default ();
 
     if (account != null && account.screen_name != Account.DUMMY) {
       main_widget = new MainWidget (account, this, cb);
@@ -184,7 +183,7 @@ public class MainWindow : Gtk.ApplicationWindow {
           app_menu_button = new Gtk.MenuButton ();
           app_menu_button.image = new Gtk.Image.from_icon_name ("emblem-system-symbolic", Gtk.IconSize.MENU);
           app_menu_button.get_style_context ().add_class ("image-button");
-          app_menu_button.menu_model = ((Gtk.Application)app).app_menu;
+          app_menu_button.menu_model = cb.app_menu;
           headerbar.pack_end (app_menu_button);
         } else
           app_menu_button.show ();
@@ -327,7 +326,7 @@ public class MainWindow : Gtk.ApplicationWindow {
       main_widget.stop ();
 
     if (account == null)
-      return false;
+      return Gdk.EVENT_PROPAGATE;
 
     unowned GLib.List<weak Gtk.Window> ws = this.application.get_windows ();
     debug("Windows: %u", ws.length ());
@@ -342,7 +341,7 @@ public class MainWindow : Gtk.ApplicationWindow {
     save_geometry ();
 
     if (startup_accounts.length > 0)
-      return false;
+      return Gdk.EVENT_PROPAGATE;
 
     int n_main_windows = 0;
     foreach (Gtk.Window win in ws)
@@ -359,7 +358,7 @@ public class MainWindow : Gtk.ApplicationWindow {
       Settings.get ().set_strv ("startup-accounts", new_startup_accounts);
       debug ("Saving the account %s", ((MainWindow)ws.nth_data (0)).account.screen_name);
     }
-    return false;
+    return Gdk.EVENT_PROPAGATE;
   }
 
 
@@ -374,7 +373,7 @@ public class MainWindow : Gtk.ApplicationWindow {
    *
    */
   private void load_geometry () {
-    if (account == null) {
+    if (account == null || account.screen_name == Account.DUMMY) {
       debug ("Could not load geometry, account == null");
       return;
     }
@@ -393,7 +392,7 @@ public class MainWindow : Gtk.ApplicationWindow {
       return;
 
     move (x, y);
-    resize (w, h);
+    this.set_default_size (w, h);
   }
 
   /**
@@ -407,7 +406,7 @@ public class MainWindow : Gtk.ApplicationWindow {
     GLib.Variant new_geom;
     GLib.VariantBuilder builder = new GLib.VariantBuilder (new GLib.VariantType("a{s(iiii)}"));
     var iter = win_geom.iterator ();
-    string key = null;
+    string? key = null;
     int x = 0,
         y = 0,
         w = 0,
@@ -419,9 +418,8 @@ public class MainWindow : Gtk.ApplicationWindow {
       key = null; // Otherwise we leak key
     }
     /* Finally, add this window */
-    get_position (out x, out y);
-    w = get_allocated_width ();
-    h = get_allocated_height ();
+    this.get_position (out x, out y);
+    this.get_size (out w, out h);
     builder.add ("{s(iiii)}", account.screen_name, x, y, w, h);
     new_geom = builder.end ();
     debug ("Saving geomentry for %s: %d,%d,%d,%d", account.screen_name, x, y, w, h);

@@ -130,16 +130,14 @@ public interface ITimeline : Gtk.Widget, IPage {
     for (uint i = 0, p = tm.get_n_items (); i < p; i ++) {
       var tweet = (Tweet) tm.get_object (i);
       if (account.filter_matches (tweet)) {
-        tweet.hidden_flags |= Tweet.HIDDEN_FILTERED;
+        tweet.set_flag (TweetState.HIDDEN_FILTERED);
         if (!tweet.seen) {
           this.unread_count --;
           tweet.seen = true;
         }
       } else {
-        tweet.hidden_flags &= ~Tweet.HIDDEN_FILTERED;
+        tweet.unset_flag (TweetState.HIDDEN_FILTERED);
       }
-
-      tweet.hidden_flags_changed ();
     }
   }
 }

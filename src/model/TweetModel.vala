@@ -109,6 +109,7 @@ public class TweetModel : GLib.Object, GLib.ListModel {
   }
 
   public void add (Tweet tweet) {
+    assert (tweet.id > 0);
     this.insert_sorted (tweet);
 
     if (tweet.id > this.max_id)
@@ -166,30 +167,26 @@ public class TweetModel : GLib.Object, GLib.ListModel {
     this.items_changed (pos, 1, 0);
   }
 
-  public void toggle_flag_on_tweet (int64 user_id, uint reason, bool active) {
+  public void toggle_flag_on_tweet (int64 user_id, TweetState reason, bool active) {
     foreach (Tweet tweet in tweets) {
       if (tweet.user_id == user_id) {
         if (active)
-          tweet.hidden_flags |= reason;
+          tweet.set_flag (reason);
         else
-          tweet.hidden_flags &= ~reason;
-
-        tweet.hidden_flags_changed ();
+          tweet.unset_flag (reason);
       }
     }
   }
 
-  public void toggle_flag_on_retweet (int64 user_id, uint reason, bool active) {
+  public void toggle_flag_on_retweet (int64 user_id, TweetState reason, bool active) {
     foreach (Tweet tweet in tweets) {
       if (tweet.retweeted_tweet != null &&
           tweet.source_tweet.author.id == user_id) {
 
         if (active)
-          tweet.hidden_flags |= reason;
+          tweet.set_flag (reason);
         else
-          tweet.hidden_flags &= ~reason;
-
-        tweet.hidden_flags_changed ();
+          tweet.unset_flag (reason);
       }
     }
   }
@@ -210,7 +207,7 @@ public class TweetModel : GLib.Object, GLib.ListModel {
     }
   }
 
-  public Tweet? get_from_id (int64 id, int diff) {
+  public Tweet? get_from_id (int64 id, int diff = -1) {
     for (int i = 0; i < tweets.size; i ++) {
       if (tweets.get (i).id == id) {
         if (i + diff < tweets.size && i + diff >= 0)
@@ -230,13 +227,13 @@ public class TweetModel : GLib.Object, GLib.ListModel {
         if (t.is_hidden)
           this.remove_tweet (t);
         else
-          t.deleted = true;
+          t.set_flag (TweetState.DELETED);
 
 
         return true;
 
-      } else if (t.retweeted && t.my_retweet == id) {
-        t.retweeted = false;
+      } else if (t.is_flag_set (TweetState.RETWEETED) && t.my_retweet == id) {
+        t.unset_flag (TweetState.RETWEETED);
       }
     }
 

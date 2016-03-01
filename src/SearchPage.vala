@@ -21,7 +21,6 @@ class SearchPage : IPage, Gtk.Box {
   /** The unread count here is always zero */
   public int unread_count {
     get { return 0; }
-    set {;}
   }
   public unowned Account account        { get; set; }
   public unowned MainWindow main_window { set; get; }
@@ -38,7 +37,7 @@ class SearchPage : IPage, Gtk.Box {
   private Gtk.Label tweets_header;
   [GtkChild]
   private ScrollWidget scroll_widget;
-  private Gtk.RadioButton tool_button;
+  private Gtk.RadioButton radio_button;
   public DeltaUpdater delta_updater;
   private LoadMoreEntry load_more_entry = new LoadMoreEntry ();
   private string search_query;
@@ -91,7 +90,8 @@ class SearchPage : IPage, Gtk.Box {
 
 
     if (term == null) {
-      if (last_focus_widget != null)
+      if (last_focus_widget != null &&
+          last_focus_widget.parent != null)
         last_focus_widget.grab_focus ();
       else
         search_entry.grab_focus ();
@@ -108,9 +108,9 @@ class SearchPage : IPage, Gtk.Box {
         tweet_list.remove (w);
       }
       tweet_list.get_placeholder ().hide ();
+      this.last_focus_widget  = null;
 
       this.remove_content_timeout = 0;
-
       return GLib.Source.REMOVE;
     });
   }
@@ -184,6 +184,8 @@ class SearchPage : IPage, Gtk.Box {
         root = TweetUtils.load_threaded.end (res);
       } catch (GLib.Error e) {
         warning (e.message);
+        tweet_list.set_error (e.message);
+
         if (!collect_obj.done)
           collect_obj.emit ();
 
@@ -252,6 +254,7 @@ class SearchPage : IPage, Gtk.Box {
         root = TweetUtils.load_threaded.end (res);
       } catch (GLib.Error e) {
         warning (e.message);
+        tweet_list.set_error (e.message);
         if (!collect_obj.done)
           collect_obj.emit ();
 
@@ -300,12 +303,12 @@ class SearchPage : IPage, Gtk.Box {
     tweet_list.@foreach ((w) => w.show());
   }
 
-  public void create_tool_button (Gtk.RadioButton? group){
-    tool_button = new BadgeRadioToolButton (group, "edit-find-symbolic", _("Search"));
+  public void create_radio_button (Gtk.RadioButton? group){
+    radio_button = new BadgeRadioButton (group, "edit-find-symbolic", _("Search"));
   }
 
-  public Gtk.RadioButton? get_tool_button() {
-    return tool_button;
+  public Gtk.RadioButton? get_radio_button() {
+    return radio_button;
   }
 
 

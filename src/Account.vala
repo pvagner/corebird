@@ -15,7 +15,6 @@
  *  along with corebird.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
 public class Account : GLib.Object {
   public static const string DUMMY = "screen_name";
   public int64 id                 {public get; private set;}
@@ -304,7 +303,7 @@ public class Account : GLib.Object {
     if (url.length > 0) {
       var msg = new Soup.Message ("GET", url);
       SOUP_SESSION.queue_message (msg, (_s, _msg) => {
-        var data_stream = new MemoryInputStream.from_data ((owned)msg.response_body.data, null);
+        var data_stream = new MemoryInputStream.from_data (msg.response_body.data, GLib.g_free);
         string type = Utils.get_file_type (url);
         Gdk.Pixbuf pixbuf;
         try {

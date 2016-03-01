@@ -15,10 +15,6 @@
  *  along with corebird.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
-
-
-
 namespace TweetUtils {
   private static const string[] DOMAINS = {
      ".com",  ".net",  ".org",    ".xxx",  ".sexy", ".pro",
@@ -73,9 +69,6 @@ namespace TweetUtils {
    * @param account The account to (un)favorite from
    * @param tweet The tweet to (un)favorite
    * @param status %true to favorite the tweet, %false to unfavorite it.
-   *
-   * TODO: Rename this, since it doesn't automatically toggle but rather just set the
-   *       favorite status based on the given boolean.
    */
   async void set_favorite_status (Account account, Tweet tweet, bool status) {
     var call = account.proxy.new_call();
@@ -93,7 +86,10 @@ namespace TweetUtils {
         Utils.show_error_object (call.get_payload (), e.message,
                                  GLib.Log.LINE, GLib.Log.FILE);
       }
-      tweet.favorited = status;
+      if (status)
+        tweet.set_flag (TweetState.FAVORITED);
+      else
+        tweet.unset_flag (TweetState.FAVORITED);
       set_favorite_status.callback ();
     });
     yield;
@@ -121,7 +117,7 @@ namespace TweetUtils {
         Utils.show_error_object (call.get_payload (), e.message,
                                  GLib.Log.LINE, GLib.Log.FILE);
       }
-      string back = call.get_payload();
+      unowned string back = call.get_payload();
       var parser = new Json.Parser ();
       try {
         parser.load_from_data (back);
@@ -131,7 +127,10 @@ namespace TweetUtils {
         } else {
           tweet.my_retweet = 0;
         }
-        tweet.retweeted = status;
+        if (status)
+          tweet.set_flag (TweetState.RETWEETED);
+        else
+          tweet.unset_flag (TweetState.RETWEETED);
       } catch (GLib.Error e) {
         critical (e.message);
         critical (back);
@@ -148,13 +147,18 @@ namespace TweetUtils {
    *
    * @return The loaded avatar.
    */
-  async Gdk.Pixbuf download_avatar (string avatar_url, int size = 48) throws GLib.Error {
-    Gdk.Pixbuf avatar = null;
+  async Gdk.Pixbuf? download_avatar (string avatar_url, int size = 48) throws GLib.Error {
+    Gdk.Pixbuf? avatar = null;
     var msg     = new Soup.Message ("GET", avatar_url);
     GLib.Error? err = null;
     SOUP_SESSION.queue_message (msg, (s, _msg) => {
+      if (_msg.status_code != Soup.Status.OK) {
+        avatar = null;
+        download_avatar.callback ();
+        return;
+      }
       var memory_stream = new MemoryInputStream.from_data(_msg.response_body.data,
-                                                          null);
+                                                          GLib.g_free);
       try {
         avatar = new Gdk.Pixbuf.from_stream_at_scale (memory_stream,
                                                       size, size,
@@ -181,25 +185,44 @@ namespace TweetUtils {
    *         tweet length into account.
    */
   public int calc_tweet_length (string text, int media_count = 0) {
-    string[] words = text.split (" ");
     int length = 0;
 
-    foreach (string s in words) {
-      string[] subwords = s.split ("\n");
-      foreach (string sw in subwords) {
-        length += get_word_length (sw);
-      }
-      length += subwords.length - 1;
-    }
+    unichar c;
+    int last_word_start = 0;
+    int n_chars = text.char_count ();
+    int cur = 0; /* Byte Index */
 
-    // Don't forget the n-1 whitespaces
-    length += words.length - 1;
+    for (int next = 0, c_n = 0; text.get_next_char (ref next, out c); c_n ++) {
+      bool splits = (c == ' ' || c == '\n' || c == '(' || c == ')' || c == '[' ||
+                     c == ']' || c == '{' || c == '}');
+
+      if (splits || c_n == n_chars - 1) {
+
+        /* Include the current character only if it's not whitespace since we are
+           later accounting for whitespace characters anyway */
+        if (!splits && c_n == n_chars - 1)
+          cur = next;
+
+        string word = text.substring (last_word_start,
+                                      cur - last_word_start);
+
+        if (word.length > 0)
+          length += get_word_length (word);
+
+        if (splits)
+          length += 1;
+
+        // Just adding one here is save since we made sure c is either ' ' or \n
+        last_word_start = cur + 1;
+      }
+      cur = next;
+    }
 
     if (length < 0) {
-      return Twitter.short_url_length_https * media_count;
+      return Twitter.characters_reserved_per_media * media_count;
     }
 
-    length += Twitter.short_url_length_https * media_count;
+    length += Twitter.characters_reserved_per_media * media_count;
 
     return length;
   }
@@ -211,11 +234,13 @@ namespace TweetUtils {
     if (s.has_prefix ("https://"))
       return Twitter.short_url_length_https;
 
-    foreach (string tld in DOMAINS) {
-      string[] parts = s.split ("/");
 
-      if (parts.length > 0 && parts[0].has_suffix (tld))
-        return Twitter.short_url_length; // Default to HTTP
+    string[] parts = s.split ("/");
+    if (parts.length > 0) {
+      foreach (unowned string tld in DOMAINS) {
+        if (parts[0].has_suffix (tld))
+          return Twitter.short_url_length; // Default to HTTP
+      }
     }
 
     return s.char_count();
@@ -273,7 +298,7 @@ namespace TweetUtils {
       if (tweet_array.length == 0) {
         GLib.Idle.add (() => {
           work_array.callback ();
-          return false;
+          return GLib.Source.REMOVE;
         });
         return null;
       }
@@ -290,24 +315,25 @@ namespace TweetUtils {
       int index = 0;
       GLib.Idle.add (() => {
         Tweet tweet = tweet_array[index];
-        if (account.user_counter == null)
-          return false;
+        if (account.user_counter == null ||
+            tweet_list == null)
+          return GLib.Source.REMOVE;
 
         account.user_counter.id_seen (ref tweet.source_tweet.author);
         if (tweet.retweeted_tweet != null)
           account.user_counter.id_seen (ref tweet.retweeted_tweet.author);
 
         if (account.filter_matches (tweet))
-          tweet.hidden_flags |= Tweet.HIDDEN_FILTERED;
+          tweet.set_flag (TweetState.HIDDEN_FILTERED);
 
         tweet_list.model.add (tweet);
 
         index ++;
         if (index == tweet_array.length) {
           work_array.callback ();
-          return false;
+          return GLib.Source.REMOVE;
         }
-        return true;
+        return GLib.Source.CONTINUE;
       });
       return null;
     });
@@ -331,7 +357,7 @@ namespace TweetUtils {
     if (word.has_prefix ("https://") && word.length > 8)
       return true;
 
-    foreach (string tld in DOMAINS)
+    foreach (unowned string tld in DOMAINS)
       if (word.has_suffix (tld))
           return true;
 

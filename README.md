@@ -50,7 +50,7 @@ This is the readme for the current *development version*. If you're looking for 
  - `libsoup-2.4`
  - `intltool >= 0.40`
  - `libgee-0.8`
- - `vala >= 0.26` (makedep)
+ - `vala >= 0.28` (makedep)
  - `automake >= 1.14` (makedep)
  - `gstreamer-1.0` (disable via --disable-video, default enabled)
  - `gst-plugins-bad-1.0 >= 1.6` (disable via --disable-video, default enabled)
@@ -69,3 +69,4 @@ make
 make install
 ```
 
+Corebird installs its application icon into `/usr/share/icons/hicolor/`, so an appropriate call to `gtk-update-icon-cache` might be needed.

@@ -73,8 +73,8 @@ class MentionsTimeline : IMessageReceiver, DefaultTimeline {
       if (account.blocked_or_muted (t.user_id))
         return;
 
-      t.seen = false;
       this.balance_next_upper_change (TOP);
+      t.seen = false;
       tweet_list.model.add (t);
 
 
@@ -130,7 +130,7 @@ class MentionsTimeline : IMessageReceiver, DefaultTimeline {
     return _("Mentions");
   }
 
-  public override void create_tool_button (Gtk.RadioButton? group) {
-    tool_button = new BadgeRadioToolButton(group, "corebird-mentions-symbolic", _("Mentions"));
+  public override void create_radio_button (Gtk.RadioButton? group) {
+    radio_button = new BadgeRadioButton(group, "corebird-mentions-symbolic", _("Mentions"));
   }
 }

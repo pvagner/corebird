@@ -34,8 +34,8 @@ class MediaVideoWidget : Gtk.Stack {
 
   public MediaVideoWidget (Media media) {
     this.cancellable = new GLib.Cancellable ();
-    assert (media.fullsize_thumbnail != null);
-    var image_surface = (Cairo.ImageSurface) media.fullsize_thumbnail;
+    assert (media.surface != null);
+    var image_surface = (Cairo.ImageSurface) media.surface;
     this.set_size_request (image_surface.get_width (), image_surface.get_height ());
 #if VIDEO
     if (media.type == MediaType.VINE)
@@ -43,6 +43,8 @@ class MediaVideoWidget : Gtk.Stack {
     else if (media.type == MediaType.ANIMATED_GIF)
       fetch_real_url.begin (media.url, "<source video-src=\"(.*?)\" type=\"video/mp4\"");
     else if (media.type == MediaType.TWITTER_VIDEO)
+      download_video.begin (media.url);
+    else if (media.type == MediaType.INSTAGRAM_VIDEO)
       download_video.begin (media.url);
     else
       critical ("Unknown video media type: %d", media.type);
@@ -54,7 +56,7 @@ class MediaVideoWidget : Gtk.Stack {
     error_label.selectable = true;
 
     image = new SurfaceProgress ();
-    image.surface = (Cairo.ImageSurface)media.fullsize_thumbnail;
+    image.surface = media.surface;
 
     this.add_named (image, "thumbnail");
     this.add_named (error_label, "error");
@@ -209,7 +211,7 @@ class MediaVideoWidget : Gtk.Stack {
         fetch_real_url.callback ();
         return;
       }
-      string back = (string)_msg.response_body.data;
+      unowned string back = (string)_msg.response_body.data;
       try {
         var regex = new GLib.Regex (regex_str, 0);
         MatchInfo info;
