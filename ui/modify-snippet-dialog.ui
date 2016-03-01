@@ -50,7 +50,7 @@
             <property name="row_spacing">6</property>
 
             <child>
-              <object class="GtkLabel">
+              <object class="GtkLabel" id="key_label">
                 <property name="visible">true</property>
                 <property name="label" translatable="yes">Keyword</property>
                 <property name="halign">end</property>
@@ -58,6 +58,9 @@
                   <class name="dim-label" />
                 </style>
 
+            <accessibility>
+              <relation type="label-for" target="key_entry"/>
+            </accessibility>
               </object>
               <packing>
                 <property name="left_attach">0</property>
@@ -72,6 +75,9 @@
                 <property name="hexpand">true</property>
                 <property name="max_length">20</property>
                 <property name="activates_default">true</property>
+                <accessibility>
+                  <relation type="labelled-by" target="key_label" />
+                </accessibility>
               </object>
               <packing>
                 <property name="left_attach">1</property>
@@ -80,7 +86,7 @@
             </child>
 
             <child>
-              <object class="GtkLabel">
+              <object class="GtkLabel" id="value_label">
                 <property name="visible">true</property>
                 <property name="label" translatable="yes">Replacement</property>
                 <property name="halign">end</property>
@@ -88,6 +94,9 @@
                   <class name="dim-label" />
                 </style>
 
+            <accessibility>
+              <relation type="label-for" target="value_entry"/>
+            </accessibility>
               </object>
               <packing>
                 <property name="left_attach">0</property>
@@ -102,6 +111,9 @@
                 <property name="hexpand">true</property>
                 <property name="max_length">200</property>
                 <property name="activates_default">true</property>
+                <accessibility>
+                  <relation type="labelled-by" target="value_label" />
+                </accessibility>
               </object>
               <packing>
                 <property name="left_attach">1</property>
